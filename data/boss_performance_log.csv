@@ -1,0 +1,2 @@
+boss,duration_s,damage_taken,player_damage_taken,attacks_landed,player_attacks_landed,phase_changes,special_abilities_used,phase_1_s,phase_2_s,phase_3_s,victory
+Nexus Core,31.04,1250,59,7,125,2,0,11.95,8.86,10.22,True
