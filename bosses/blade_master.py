@@ -139,6 +139,8 @@ class BladeMaster(Boss):
         self.charge_speed = 8  # Base charge speed
         self.charge_duration = 60  # Charge for 1 second max
         self.effects.append(Telegraph(self.x + self.width // 2, self.y + self.height // 2, 60, 60, ORANGE))
+        if self.game and hasattr(self.game, "audio_manager"):
+            self.game.audio_manager.play_custom_sound("blade_dash", volume_scale=0.75)
         
     def multi_blade_attack(self):
         angles = [-30, 0, 30]
@@ -171,6 +173,8 @@ class BladeMaster(Boss):
         self.charge_speed = 10  # Reduced from 15 to make it slower
         self.charge_duration = 45  # Charge for 0.75 seconds max
         self.effects.append(Telegraph(self.x + self.width // 2, self.y + self.height // 2, 70, 70, RED))
+        if self.game and hasattr(self.game, "audio_manager"):
+            self.game.audio_manager.play_custom_sound("blade_dash", volume_scale=0.8)
         
     def phantom_charge_attack(self):
         self.is_charging = True
@@ -178,6 +182,8 @@ class BladeMaster(Boss):
         self.charge_duration = 30  # Charge for 0.5 seconds max
         self.phantom_mode = True
         self.effects.append(Telegraph(self.x + self.width // 2, self.y + self.height // 2, 90, 90, (255, 0, 100)))
+        if self.game and hasattr(self.game, "audio_manager"):
+            self.game.audio_manager.play_custom_sound("blade_dash", volume_scale=0.9)
         
     def blade_storm_attack(self):
         for i in range(20):

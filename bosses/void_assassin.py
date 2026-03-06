@@ -324,6 +324,7 @@ class VoidAssassin(Boss):
             clone.draw(screen)
             
         # Draw main boss
+        drew_main = False
         if not self.stealth_mode or self.revealed_timer > 0:
             if self.phantom_mode:
                 alpha = 0.2 + 0.3 * max(0, self.shadow_veil_timer / 90)
@@ -333,12 +334,9 @@ class VoidAssassin(Boss):
             self.color = (int(old_color[0] * alpha), int(old_color[1] * alpha), int(old_color[2] * alpha))
             Boss.draw(self, screen)
             self.color = old_color
+            drew_main = True
 
-        # Health bar
-        health_bar_width = 300
-        health_bar_height = 8
-        health_percentage = max(0, self.health / self.max_health)
-        bar_x = WIDTH // 2 - health_bar_width // 2
-        bar_y = 30
-        pygame.draw.rect(screen, RED, (bar_x, bar_y, health_bar_width, health_bar_height))
-        pygame.draw.rect(screen, GREEN, (bar_x, bar_y, health_bar_width * health_percentage, health_bar_height))
+        # Keep HP visible even while fully stealthed.
+        if not drew_main:
+            self.health_bar_color = GREEN
+            self.draw_health_bar(screen)

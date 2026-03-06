@@ -126,11 +126,19 @@ class Boss(Entity):
         return self.projectiles
         
     def take_damage(self, damage, damage_type=DamageType.NORMAL):
-        """Override take_damage to add hit flash and logging"""
-        if super().take_damage(damage, damage_type):
-            self.hit_flash = 5
-            return True
-        return False
+        """Bosses take damage on each valid hit (no default entity i-frames)."""
+        if self.invulnerable:
+            return False
+
+        if damage_type in self.damage_resistances:
+            damage = int(damage * (1 - self.damage_resistances[damage_type]))
+
+        if damage <= 0:
+            return False
+
+        self.health = max(0, self.health - damage)
+        self.hit_flash = 5
+        return True
 
     def draw_sprite_to_hitbox(self, screen):
         """Draw sprite scaled to the current hitbox size."""
@@ -174,10 +182,14 @@ class Boss(Entity):
         
     def draw_health_bar(self, screen):
         """Draw health bar - can be overridden for custom styling"""
+        if not self.should_draw_single_health_bar():
+            return
+
         health_bar_width = 300
         health_bar_height = 8
         health_percentage = max(0, self.health / self.max_health)
-        bar_x = WIDTH // 2 - health_bar_width // 2
+        screen_width = screen.get_width() if hasattr(screen, "get_width") else WIDTH
+        bar_x = screen_width // 2 - health_bar_width // 2
         bar_y = 30
         
         # Background
@@ -196,8 +208,14 @@ class Boss(Entity):
         # Boss name
         font = pygame.font.Font(None, 24)
         text = font.render(self.name, True, WHITE)
-        text_rect = text.get_rect(center=(WIDTH // 2, bar_y - 15))
+        text_rect = text.get_rect(center=(screen_width // 2, bar_y - 15))
         screen.blit(text, text_rect)
+
+    def should_draw_single_health_bar(self):
+        """Single boss bars are hidden when the UI is rendering multi-boss bars."""
+        if not self.game or not hasattr(self.game, "current_bosses"):
+            return True
+        return len(self.game.current_bosses) <= 1
         
     def safe_list_iteration(self, lst, update_func):
         """Safely iterate and update a list, removing items during iteration"""
@@ -212,10 +230,18 @@ class Boss(Entity):
             
     def get_player_distance(self):
         """Get distance to player with safety checks"""
-        if not self.game or not self.game.player:
+        if not self.game:
             return float('inf')
-        dx = (self.x + self.width // 2) - (self.game.player.x + self.game.player.width // 2)
-        dy = (self.y + self.height // 2) - (self.game.player.y + self.game.player.height // 2)
+
+        if hasattr(self.game, "get_target_player"):
+            player = self.game.get_target_player(self)
+        else:
+            player = getattr(self.game, "player", None)
+        if not player:
+            return float('inf')
+
+        dx = (self.x + self.width // 2) - (player.x + player.width // 2)
+        dy = (self.y + self.height // 2) - (player.y + player.height // 2)
         return math.sqrt(dx * dx + dy * dy)
         
     def apply_balance_adjustments(self, adjustments):

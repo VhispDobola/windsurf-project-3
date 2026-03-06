@@ -32,6 +32,8 @@ class BossManager:
         "Chronomancer": {"health": 0.72, "damage": 1.00},
         "Thunder Emperor": {"health": 0.86, "damage": 1.00},
         "Tempest Lord": {"health": 1.08, "damage": 0.72},
+        "Ice Tyrant": {"health": 0.96, "damage": 0.92},
+        "Magma Sovereign": {"health": 0.95, "damage": 0.92},
     }
 
     def __init__(self):

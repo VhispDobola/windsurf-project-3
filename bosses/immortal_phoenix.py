@@ -146,11 +146,12 @@ class MultiStageBoss(Boss):
         self.draw_health_bar(screen)
         
         # Stage name
-        stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
-        font = pygame.font.Font(None, 24)
-        text = font.render(stage_text, True, WHITE)
-        text_rect = text.get_rect(center=(WIDTH // 2, 15))
-        screen.blit(text, text_rect)
+        if self.should_draw_single_health_bar():
+            stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
+            font = pygame.font.Font(None, 24)
+            text = font.render(stage_text, True, WHITE)
+            text_rect = text.get_rect(center=(screen.get_width() // 2, 15))
+            screen.blit(text, text_rect)
 
 class ImmortalPhoenix(MultiStageBoss):
     def __init__(self):
@@ -418,8 +419,8 @@ class ImmortalPhoenix(MultiStageBoss):
             # Fallback to default boss drawing
             pygame.draw.rect(screen, self.color, self.get_rect())
         
-        # Draw wing beats
-        if self.current_stage_index >= 1:
+        # Draw wing beats (skip Flame Form to reduce visual clutter)
+        if self.current_stage_index >= 2:
             for i in range(2):
                 wing_x = self.x + (i - 0.5) * self.width
                 wing_y = self.y + self.height // 2
@@ -442,19 +443,15 @@ class ImmortalPhoenix(MultiStageBoss):
             effect.draw(screen)
             
         # Health bar with stage indicator
-        health_bar_width = 300
-        health_bar_height = 8
-        health_percentage = max(0, self.health / self.max_health)
-        bar_x = WIDTH // 2 - health_bar_width // 2
-        bar_y = 30
-        pygame.draw.rect(screen, RED, (bar_x, bar_y, health_bar_width, health_bar_height))
-        pygame.draw.rect(screen, self.current_stage.color, (bar_x, bar_y, health_bar_width * health_percentage, health_bar_height))
+        self.health_bar_color = self.current_stage.color
+        self.draw_health_bar(screen)
         
         # Stage name
-        stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
-        font = pygame.font.Font(None, 24)
-        text = font.render(stage_text, True, WHITE)
-        text_rect = text.get_rect(center=(WIDTH // 2, bar_y - 20))
-        screen.blit(text, text_rect)
+        if self.should_draw_single_health_bar():
+            stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
+            font = pygame.font.Font(None, 24)
+            text = font.render(stage_text, True, WHITE)
+            text_rect = text.get_rect(center=(screen.get_width() // 2, 10))
+            screen.blit(text, text_rect)
 
 

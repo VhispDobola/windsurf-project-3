@@ -6,9 +6,32 @@ from core.effect import Telegraph
 from core.entity import DamageType
 from core.movement_system import BossMovementController, SineWaveMovement, CircularMovement
 from config.constants import WIDTH, HEIGHT, RED, ORANGE, YELLOW, WHITE
-from utils import load_image_with_transparency
+from utils import load_image_with_transparency, load_boss_profile
 
 class MagmaSovereign(Boss):
+    DEFAULT_PHASE_PROFILE = {
+        1: {
+            "magma_bomb_cd": 115,
+            "geyser_cd": 155,
+            "molten_rain_cd": 190,
+            "heat_wave_cd": 235,
+            "damage_scale": 0.90,
+        },
+        2: {
+            "tracking_cd": 82,
+            "wall_cd": 130,
+            "chain_cd": 102,
+            "damage_scale": 0.94,
+        },
+        3: {
+            "vortex_cd": 170,
+            "cascade_cd": 195,
+            "tsunami_cd": 215,
+            "inferno_cd": 320,
+            "damage_scale": 0.97,
+        },
+    }
+
     def __init__(self):
         super().__init__(WIDTH // 2 - 75, 100, 150, 150, 800, "Magma Sovereign")
         self.color = (139, 69, 19)
@@ -44,6 +67,7 @@ class MagmaSovereign(Boss):
         self.vortex_center = None
         self.tsunami_wave = None
         self.inferno_mode = False
+        self.phase_profile = load_boss_profile("Magma Sovereign", "phase_profile", self.DEFAULT_PHASE_PROFILE)
         
         # Initialize movement system
         self.movement_controller = BossMovementController(self)
@@ -58,6 +82,7 @@ class MagmaSovereign(Boss):
             self.use_sprite = False
         
     def run_attacks(self):
+        profile = self.phase_profile.get(self.phase, self.phase_profile[3])
         # Update all timers
         self.eruption_timer = max(0, self.eruption_timer - 1)
         self.lava_wave_timer = max(0, self.lava_wave_timer - 1)
@@ -77,44 +102,44 @@ class MagmaSovereign(Boss):
             # Phase 1: staggered foundation (one trigger at a time)
             if self.magma_bomb_timer <= 0:
                 self.create_magma_bombs()
-                self.magma_bomb_timer = 100
+                self.magma_bomb_timer = profile["magma_bomb_cd"]
             elif self.geyser_timer <= 0:
                 self.create_lava_geysers()
-                self.geyser_timer = 140
+                self.geyser_timer = profile["geyser_cd"]
             elif self.molten_rain_timer <= 0:
                 self.create_molten_rain()
-                self.molten_rain_timer = 175
+                self.molten_rain_timer = profile["molten_rain_cd"]
             elif self.heat_wave_timer <= 0:
                 self.create_heat_waves()
-                self.heat_wave_timer = 220
+                self.heat_wave_timer = profile["heat_wave_cd"]
                 
         elif self.phase == 2:
             # Phase 2: Pressure Tactics
             if self.tracking_magma_timer <= 0:
                 self.create_tracking_magma()
-                self.tracking_magma_timer = 70
+                self.tracking_magma_timer = profile["tracking_cd"]
             if self.lava_wall_timer <= 0:
                 self.create_lava_walls()
-                self.lava_wall_timer = 120
+                self.lava_wall_timer = profile["wall_cd"]
             if self.volcanic_chain_timer <= 0:
                 self.create_volcanic_chain()
-                self.volcanic_chain_timer = 90
+                self.volcanic_chain_timer = profile["chain_cd"]
             self.heat_aura = True
             
         else:  # phase 3
             # Phase 3: Ultimate Devastation
             if self.vortex_timer <= 0:
                 self.create_magma_vortex()
-                self.vortex_timer = 150
+                self.vortex_timer = profile["vortex_cd"]
             if self.cascade_timer <= 0:
                 self.create_cascade_eruptions()
-                self.cascade_timer = 180
+                self.cascade_timer = profile["cascade_cd"]
             if self.tsunami_timer <= 0:
                 self.create_lava_tsunami()
-                self.tsunami_timer = 200
+                self.tsunami_timer = profile["tsunami_cd"]
             if self.inferno_timer <= 0:
                 self.activate_final_inferno()
-                self.inferno_timer = 300
+                self.inferno_timer = profile["inferno_cd"]
             self.heat_aura = True
             
         self.movement()
@@ -134,7 +159,7 @@ class MagmaSovereign(Boss):
         self.lava_pools.append({
             'x': eruption_x, 'y': eruption_y,
             'radius': 20, 'max_radius': 60,
-            'growing': True, 'damage': 25,
+            'growing': True, 'damage': self._scale_damage(25),
             'lifetime': 300, 'delay': 30  # Start growing after warning
         })
         
@@ -147,7 +172,7 @@ class MagmaSovereign(Boss):
             self.lava_pools.append({
                 'x': x, 'y': y,
                 'radius': 25, 'max_radius': 70,
-                'growing': True, 'damage': 30,
+                'growing': True, 'damage': self._scale_damage(30),
                 'lifetime': 240
             })
             self.effects.append(Telegraph(x, y, 70, 70, RED))
@@ -166,7 +191,7 @@ class MagmaSovereign(Boss):
         self.lava_pools.append({
             'x': blast_x, 'y': blast_y,
             'radius': 40, 'max_radius': 120,
-            'growing': True, 'damage': 40,
+            'growing': True, 'damage': self._scale_damage(40),
             'lifetime': 180, 'delay': 60  # Start growing after warning
         })
         
@@ -177,7 +202,7 @@ class MagmaSovereign(Boss):
         
         self.molten_ground.append({
             'x': pool_x, 'y': pool_y,
-            'radius': 40, 'damage': 15,
+            'radius': 40, 'damage': self._scale_damage(15),
             'lifetime': 400
         })
         
@@ -193,7 +218,7 @@ class MagmaSovereign(Boss):
             
             self.molten_ground.append({
                 'x': x, 'y': y,
-                'radius': 30, 'damage': 20,
+                'radius': 30, 'damage': self._scale_damage(20),
                 'lifetime': 300
             })
         self.effects.append(Telegraph(center_x, center_y, 100, 100, ORANGE))
@@ -206,7 +231,7 @@ class MagmaSovereign(Boss):
             
             self.molten_ground.append({
                 'x': x, 'y': y,
-                'radius': 50, 'damage': 35,
+                'radius': 50, 'damage': self._scale_damage(35),
                 'lifetime': 250
             })
             
@@ -231,7 +256,7 @@ class MagmaSovereign(Boss):
                 'vx': math.cos(angle) * 5,
                 'vy': math.sin(angle) * 5,
                 'radius': 8,
-                'damage': 35,
+                'damage': self._scale_damage(35),
                 'lifetime': 120
             })
     
@@ -249,7 +274,7 @@ class MagmaSovereign(Boss):
             self.lava_geysers.append({
                 'x': geyser_x, 'y': geyser_y,
                 'radius': 15, 'max_radius': 45,
-                'growing': True, 'damage': 40,
+                'growing': True, 'damage': self._scale_damage(40),
                 'lifetime': 180, 'delay': 10
             })
     
@@ -261,7 +286,7 @@ class MagmaSovereign(Boss):
                 'y': -20,
                 'vy': random.uniform(3, 6),
                 'radius': 6,
-                'damage': 25,
+                'damage': self._scale_damage(25),
                 'lifetime': 200
             })
     
@@ -275,7 +300,7 @@ class MagmaSovereign(Boss):
             'y': boss_center_y,
             'radius': 20,
             'max_radius': 200,
-            'damage': 30,
+            'damage': self._scale_damage(30),
             'lifetime': 100,
             'expanding': True
         })
@@ -296,7 +321,7 @@ class MagmaSovereign(Boss):
                 'acceleration': 0.08,
                 'max_speed': 5,
                 'radius': 10,
-                'damage': 25,
+                'damage': self._scale_damage(25),
                 'lifetime': 180
             })
     
@@ -311,7 +336,7 @@ class MagmaSovereign(Boss):
         else:  # top
             wall = {'x': 100, 'y': 0, 'width': WIDTH - 200, 'height': 30, 'vy': 2}
             
-        wall['damage'] = 50
+        wall['damage'] = self._scale_damage(50)
         wall['lifetime'] = 240
         self.lava_walls.append(wall)
     
@@ -324,7 +349,7 @@ class MagmaSovereign(Boss):
         self.chain_eruptions.append({
             'x': start_x, 'y': start_y,
             'radius': 20, 'max_radius': 50,
-            'growing': True, 'damage': 35,
+            'growing': True, 'damage': self._scale_damage(35),
             'lifetime': 200, 'delay': 0,
             'chain_count': 0
         })
@@ -339,7 +364,7 @@ class MagmaSovereign(Boss):
             'y': HEIGHT // 2,
             'radius': 150,
             'pull_strength': 3,
-            'damage': 15,
+            'damage': self._scale_damage(15),
             'lifetime': 180
         }
     
@@ -352,7 +377,7 @@ class MagmaSovereign(Boss):
             self.chain_eruptions.append({
                 'x': x, 'y': y,
                 'radius': 25, 'max_radius': 80,
-                'growing': True, 'damage': 55,
+                'growing': True, 'damage': self._scale_damage(55),
                 'lifetime': 250, 'delay': i * 15,
                 'chain_count': 0
             })
@@ -367,7 +392,7 @@ class MagmaSovereign(Boss):
             'width': 40,
             'height': 100,
             'vx': 4 if side == 'left' else -4,
-            'damage': 60,
+            'damage': self._scale_damage(60),
             'lifetime': 300
         }
     
@@ -388,9 +413,13 @@ class MagmaSovereign(Boss):
             self.lava_pools.append({
                 'x': x, 'y': y,
                 'radius': 30, 'max_radius': 70,
-                'growing': True, 'damage': 65,
+                'growing': True, 'damage': self._scale_damage(65),
                 'lifetime': 200, 'delay': 0
             })
+
+    def _scale_damage(self, base_damage):
+        profile = self.phase_profile.get(self.phase, self.phase_profile[3])
+        return max(1, int(base_damage * profile["damage_scale"]))
             
     def movement(self):
         # Use new movement system
@@ -457,7 +486,7 @@ class MagmaSovereign(Boss):
                                          geyser['radius'] * 2, geyser['radius'] * 2)
                 
                 if geyser_rect.colliderect(player_rect):
-                    if not hasattr(geyser, 'damage_cooldown') or geyser['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in geyser or geyser['damage_cooldown'] <= 0:
                         self.game.player.take_damage(geyser['damage'])
                         geyser['damage_cooldown'] = 30
                     else:
@@ -495,7 +524,7 @@ class MagmaSovereign(Boss):
                                        wave['radius'] * 2, wave['radius'] * 2)
                 
                 if wave_rect.colliderect(player_rect):
-                    if not hasattr(wave, 'damage_cooldown') or wave['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in wave or wave['damage_cooldown'] <= 0:
                         self.game.player.take_damage(wave['damage'])
                         wave['damage_cooldown'] = 20
                     else:
@@ -556,7 +585,7 @@ class MagmaSovereign(Boss):
                 player_rect = self.game.player.get_rect()
                 
                 if wall_rect.colliderect(player_rect):
-                    if not hasattr(wall, 'damage_cooldown') or wall['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in wall or wall['damage_cooldown'] <= 0:
                         self.game.player.take_damage(wall['damage'])
                         wall['damage_cooldown'] = 40
                     else:
@@ -581,7 +610,7 @@ class MagmaSovereign(Boss):
                                         chain['radius'] * 2, chain['radius'] * 2)
                 
                 if chain_rect.colliderect(player_rect):
-                    if not hasattr(chain, 'damage_cooldown') or chain['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in chain or chain['damage_cooldown'] <= 0:
                         self.game.player.take_damage(chain['damage'])
                         chain['damage_cooldown'] = 35
                     else:
@@ -676,7 +705,7 @@ class MagmaSovereign(Boss):
                                        pool['radius'] * 2, pool['radius'] * 2)
                 
                 if pool_rect.colliderect(player_rect):
-                    if not hasattr(pool, 'damage_cooldown') or pool['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in pool or pool['damage_cooldown'] <= 0:
                         self.game.player.take_damage(pool['damage'])
                         pool['damage_cooldown'] = 60
                     else:
@@ -695,7 +724,7 @@ class MagmaSovereign(Boss):
                                          ground['radius'] * 2, ground['radius'] * 2)
                 
                 if ground_rect.colliderect(player_rect):
-                    if not hasattr(ground, 'damage_cooldown') or ground['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in ground or ground['damage_cooldown'] <= 0:
                         self.game.player.take_damage(ground['damage'])
                         ground['damage_cooldown'] = 90
                     else:
@@ -842,4 +871,3 @@ class MagmaSovereign(Boss):
         for effect in self.effects:
             effect.draw(screen)
         self.draw_health_bar(screen)
-

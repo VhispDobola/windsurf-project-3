@@ -7,6 +7,7 @@ from enum import Enum
 
 class GameState(Enum):
     MENU = "menu"
+    CUSTOMIZATION = "customization"
     BOSS_INTRO = "boss_intro"
     FIGHTING = "fighting"
     UPGRADE = "upgrade"

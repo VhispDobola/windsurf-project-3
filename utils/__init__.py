@@ -9,6 +9,7 @@ from .performance_logger import PerformanceLogger
 from .boss_scaling import position_boss_pair
 from .error_handler import GameErrorHandler, validate_game_config
 from .balance_monitor import load_log_driven_balance
+from .boss_tuning import load_boss_profile
 
 def get_project_root():
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -36,5 +37,5 @@ def load_image_with_transparency(*parts, transparent_color=None):
 __all__ = [
     'PerformanceLogger', 'position_boss_pair', 'GameErrorHandler', 'validate_game_config',
     'get_project_root', 'asset_path', 'load_image', 'load_image_with_transparency',
-    'load_log_driven_balance'
+    'load_log_driven_balance', 'load_boss_profile'
 ]

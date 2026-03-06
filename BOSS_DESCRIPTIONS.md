@@ -422,23 +422,52 @@
 
 ### 10. Crystalline Destroyer
 **Visual Appearance:**
-- Massive crystalline entity with sharp geometric facets
-- Multiple colors refracting through crystal surfaces
-- Creates prism effects with light
-- Sharp, angular design that seems dangerous
-- Shatters and reforms during attacks
+- Massive crystalline entity with sharp geometric facets that refract light
+- Multi-stage transformation with different crystal formations
+- Rock Form: Gray stone-like appearance with crude crystal formations
+- Crystal Form: Blue crystalline body with growing crystal spikes
+- Prism Form: Multicolored aura with rainbow light refraction effects
+- Diamond Form: Ultimate form with white diamond crown and enhanced size
+- Creates crystal particles, resonance waves, and geometric light patterns
+
+**Attack Descriptions & Visual Effects:**
+
+**Rock Form (Stage 1):**
+- **Earthquake Attack:** Screen shakes violently as gray crystal rocks fall from above in scattered patterns, each rock leaving dust particle trails and creating small impact craters.
+- **Tectonic Slam:** Massive vertical crystal pillars slam down in 4 lanes across the screen, each pillar creating telegraphed cross markers before impact with ground-shattering visual effects.
+
+**Crystal Form (Stage 2):**
+- **Crystal Shard Attack:** 10 blue crystal shards orbit the boss in a rotating ring pattern, each shard glowing with blue energy and leaving crystalline particle trails as they home toward the player.
+- **Crystal Crossfire:** Dual-sided fan attacks from left and right screen edges, creating crossing patterns of blue crystal projectiles that converge on player position with geometric precision.
+
+**Prism Form (Stage 3):**
+- **Prism Rainbow Attack:** 6 colored beams (red, orange, yellow, green, blue, purple) emanate from boss in rotating fan pattern, each beam creating rainbow light refraction effects and leaving colored particle trails. Beams rotate and sweep across the screen creating complex light patterns.
+
+**Diamond Form (Stage 4):**
+- **Diamond Storm Attack:** Ultimate combination attack with multiple effects:
+  - **Resonance Waves:** 4 expanding white energy rings that pulse outward from boss, each wave creating visual distortion effects and damaging players in their path.
+  - **Diamond Shard Explosion:** 20 white diamond shards explode outward in all directions, each shard glowing with brilliant white light and creating crystalline particle trails.
+
+**Visual Effects:**
+- Crystal spikes grow from boss body in higher stages
+- Rainbow aura rotates around boss in Prism Form
+- Diamond crown appears in final stage
+- Crystal particles and geometric light patterns throughout
+- Screen shake during powerful attacks
 
 **Sound Effects:**
-- Crystal chime and resonance sounds
-- Shattering glass sounds for attacks
-- High-frequency crystal humming
-- Sharp crystalline impact sounds
+- Crystal chime and resonance sounds during attacks
+- Shattering glass sounds for projectile impacts
+- Rock cracking and earth rumbling during Earthquake
+- High-frequency crystal humming during energy attacks
+- Sharp crystalline impact sounds for shard attacks
 - Resonant frequency sounds for special attacks
 
 **Boss Music:**
-- **Phase 1:** Complex minimalist music with crystal percussion
-- **Phase 2:** Adds dissonant harmonies and faster tempo
-- **Phase 3:** Intense atonal music with complex rhythms
+- **Phase 1 (Rock Form):** Heavy percussion with deep drums and rock-cracking sounds
+- **Phase 2 (Crystal Form):** Adds crystalline chimes and complex minimalist patterns
+- **Phase 3 (Prism Form):** Dissonant harmonies with rainbow-colored synth layers
+- **Phase 4 (Diamond Form):** Intense atonal music with complex rhythms and crystal percussion
 - **Overall Theme:** "Crystal Destruction" - 140 BPM, A# minor, emphasis on percussion and dissonance
 
 ---
@@ -446,91 +475,213 @@
 ### 11. Eternal Dragon
 **Visual Appearance:**
 - Massive ancient dragon with scales that shimmer like stars
-- Eyes that glow with ancient wisdom
-- Wings that create cosmic dust when flapping
-- Breath attacks show different elemental effects
-- Creates weather and environmental effects
+- Multi-stage transformation with different elemental forms
+- Young Dragon: Green scales with youthful energy and agile movements
+- Fire Dragon: Orange-red scales with flame aura and burning eyes
+- Ice Dragon: Light blue scales with frost aura and freezing breath
+- Ancient Dragon: Purple scales with elemental mastery and majestic presence
+- Eyes that glow with ancient wisdom and power
+- Wings that create wind and particle effects when flapping
+- Creates weather and environmental effects based on current element
+
+**Attack Descriptions & Visual Effects:**
+
+**Young Dragon (Stage 1):**
+- **Claw Attack:** 3 swift gray claw projectiles that home toward player position, each claw leaving motion blur trails and creating sharp impact effects.
+- **Wing Gust Attack:** 6 gray energy projectiles burst outward in circular pattern, each creating wind distortion effects and pushing player away from boss.
+
+**Fire Dragon (Stage 2):**
+- **Fire Breath Attack:** Massive cone of 20 orange fire projectiles that spread in fan pattern downward, each fireball leaving flame trails and creating burning particle effects.
+- **Sweeping Fire Breath:** 28 fire projectiles create sweeping wall pattern with rotating safe gap, each fire leaving orange light trails and creating heat distortion effects.
+
+**Ice Dragon (Stage 3):**
+- **Ice Storm Attack:** 16 blue ice shards explode outward in perfect circular pattern, each shard glowing with cold blue light and leaving frost particle trails that slow players on contact.
+- **Ice Wall Sweep:** Horizontal wall of 12 blue ice shards sweeps across screen from left or right, each shard creating freezing effects and leaving ice crystal trails.
+
+**Ancient Dragon (Stage 4):**
+- **Elemental Cataclysm:** Ultimate combination attack with all elements:
+  - **Fire Spiral:** 12 ultimate fire projectiles spiral outward in rotating pattern, each leaving massive flame trails.
+  - **Ice Explosion:** 8 ice projectiles spawn randomly across screen, each creating freezing zones with ice crystal effects.
+  - **Lightning Storm:** 6 yellow lightning strikes hit random locations, each creating electrical discharge effects and branching light patterns.
+- **Ancient Crossfire:** 10 projectiles alternate between fire and ice in circular pattern, creating alternating elemental zones with contrasting visual effects.
+
+**Visual Effects:**
+- Wing flap animations with wind distortion in higher stages
+- Elemental auras (fire, ice) around boss body
+- Particle effects for each element type
+- Screen shake during ultimate attacks
+- Color transitions between stages
 
 **Sound Effects:**
-- Deep dragon roar that shakes the screen
-- Wing beats that sound like thunder
-- Scale rattling sounds when moving
-- Elemental breath sounds (fire, ice, lightning)
-- Ancient magical humming
+- Deep dragon roar that shakes the screen during transformations
+- Wing beats that sound like thunder with low-frequency rumbling
+- Scale rattling sounds when moving with metallic resonance
+- Elemental breath sounds: fire crackling, ice shattering, lightning crackling
+- Ancient magical humming during special attacks
+- Roaring sounds with layered harmonics for ultimate attacks
 
 **Boss Music:**
-- **Phase 1:** Epic fantasy orchestral with powerful brass
-- **Phase 2:** Adds choir and more complex orchestration
-- **Phase 3:** Full epic fantasy with orchestra, choir, and solo instruments
+- **Phase 1 (Young Dragon):** Epic fantasy orchestral with powerful brass and driving rhythm
+- **Phase 2 (Fire Dragon):** Adds intense percussion and fire-themed sound effects
+- **Phase 3 (Ice Dragon):** Cold, atmospheric strings with ice crystalline sounds
+- **Phase 4 (Ancient Dragon):** Full epic fantasy with orchestra, choir, and solo instruments
 - **Overall Theme:** "Dragon's Legacy" - 100 BPM, D minor, epic fantasy orchestral style
 
 ---
 
 ### 12. Ice Tyrant
 **Visual Appearance:**
-- Massive ice golem with sharp ice crystal formations
+- Massive ice golem with sharp ice crystal formations covering body
 - Glowing blue ice that seems to pulse with cold energy
-- Creates frost and snow effects around attacks
-- Eyes burn with cold blue light
+- Creates frost and snow effects around all attacks
+- Eyes burn with cold blue light that intensifies during attacks
 - Leaves trails of ice and frost when moving
+- Floating snowflakes and ice particles constantly surround boss
+- Freezing aura that expands in higher phases
+
+**Attack Descriptions & Visual Effects:**
+
+**Phase 1:**
+- **Frost Wave:** Single expanding ring of ice that creates visual ripples, leaving ice particle trails and slowing players with frost effects.
+- **Ice Zone:** Persistent blue ice circles that appear on battlefield, each zone showing 6-pointed snowflake patterns and continuously damaging players inside.
+- **Ice Wall Sweep:** Horizontal ice wall moves across screen with visible safe gap, wall showing ice crystal formations and creating freezing visual effects.
+
+**Phase 2:**
+- **Blizzard Attack:** 3 frost waves create simultaneously across screen, each wave leaving heavy snow particle effects and creating blizzard conditions.
+- **Ice Spikes:** 6 ice zones appear in hexagonal pattern around center point, each zone showing elaborate snowflake patterns and creating interconnected ice formations.
+- **Shatter Mode:** Boss becomes aggressive, "SHATTER!" text appears, freezing effects temporarily disabled, and boss attacks with increased intensity.
+- **Freezing Aura:** Constant blue aura surrounds boss, damaging nearby players and creating floating snowflake particles.
+
+**Phase 3:**
+- **Absolute Zero:** Massive freezing wave from boss position, creating intense visual distortion and leaving heavy ice particle trails across entire screen.
+- **Ice Prison:** 4 ice zones appear in grid pattern, each zone showing complex snowflake formations and creating prison-like barriers.
+- **Enhanced Shatter:** Longer shatter duration with more aggressive attack patterns.
+
+**Visual Effects:**
+- Floating snowflakes around boss and in ice zones
+- 6-pointed snowflake patterns in ice zones
+- Expanding frost rings with ice particles
+- Freezing aura with pulsing blue light
+- Screen shake during shatter mode
+- Ice crystal formations on walls and zones
 
 **Sound Effects:**
-- Ice cracking and shattering sounds
-- Wind howling during ice storms
-- Frost formation crackling sounds
-- Deep resonant ice humming
-- Sharp ice impact sounds
+- Ice cracking and shattering sounds during attacks
+- Wind howling during blizzards with low-frequency rumbling
+- Frost formation crackling sounds with high-frequency ice crystals
+- Deep resonant ice humming during special attacks
+- Sharp ice impact sounds with crystalline resonance
+- Blizzard wind sounds with layered ice particle effects
 
 **Boss Music:**
-- **Phase 1:** Dark, cold ambient with deep bass and ice percussion
-- **Phase 2:** Adds driving strings and faster tempo during ice storms
-- **Phase 3:** Intense cold-themed music with complex rhythms
+- **Phase 1:** Dark, cold ambient with deep bass and ice percussion sounds
+- **Phase 2:** Adds driving strings and faster tempo during ice storms with complex harmonies
+- **Phase 3:** Intense cold-themed music with complex rhythms and full orchestral elements
 - **Overall Theme:** "Frozen Dominion" - 110 BPM, F# minor, emphasis on cold, atmospheric elements
 
 ---
 
 ### 13. Magma Sovereign
 **Visual Appearance:**
-- Massive lava creature with flowing molten rock
-- Glowing orange and red cracks across body
-- Leaves trails of lava and embers
-- Eyes burn like volcanic vents
+- Massive lava creature with flowing molten rock across body
+- Glowing orange and red cracks that pulse with heat
+- Leaves trails of lava and embers when moving
+- Eyes burn like volcanic vents with intense orange light
 - Creates smoke and ash effects constantly
+- Lava bubbles and molten particles float around boss
+- Heat distortion effects in higher phases
+
+**Attack Descriptions & Visual Effects:**
+
+**Phase 1:**
+- **Magma Bombs:** 3 fast-moving orange projectiles that home toward player, each bomb leaving glowing trails and creating lava pools on impact.
+- **Lava Geysers:** Quick eruptions with minimal warning, creating expanding orange lava pools with bubble effects and lava particle emission.
+- **Molten Rain:** 8 orange lava drops fall from above, each leaving fire trails and creating small lava splashes on impact.
+- **Heat Waves:** Expanding rings of fire from boss position, creating heat distortion effects and leaving flame particle trails.
+
+**Phase 2:**
+- **Tracking Magma:** 2 homing projectiles that accelerate over time, each leaving orange trails and showing predictive targeting lines.
+- **Lava Walls:** Barriers that shrink playable area, walls showing lava flow patterns and creating heat distortion effects.
+- **Volcanic Chain:** Eruptions that trigger nearby chain reactions, each eruption creating expanding lava zones that spawn additional eruptions.
+- **Heat Aura:** Constant damaging aura around boss, creating heat distortion and fire particle effects.
+
+**Phase 3:**
+- **Magma Vortex:** Pulling effect that draws player toward center while damaging, creating swirling lava patterns and heat distortion.
+- **Cascade Eruptions:** Screen-filling chain reaction with 5 timed eruptions, each creating massive lava explosions with chain reaction effects.
+- **Lava Tsunami:** Massive wave crossing screen horizontally, showing towering lava wall with wave crest effects.
+- **Final Inferno:** Ultimate combination of all attack types simultaneously, creating screen-filling lava effects with multiple overlapping attack patterns.
+
+**Visual Effects:**
+- Lava bubbles rising from lava pools
+- Heat distortion around all fire effects
+- Glowing lava cracks on boss body
+- Smoke and ash particles constantly
+- Fire trails on all projectiles
+- Pulsing orange light during attacks
 
 **Sound Effects:**
-- Lava bubbling and flowing sounds
-- Volcanic eruption sounds for major attacks
-- Rock cracking and breaking
-- Deep earth rumbling
-- Intense heat distortion sounds
+- Lava bubbling and flowing sounds with low-frequency rumbling
+- Volcanic eruption sounds for major attacks with explosive impacts
+- Rock cracking and breaking sounds during eruptions
+- Deep earth rumbling during powerful attacks
+- Intense heat distortion sounds with high-frequency crackling
+- Fire whooshing and lava splashing sounds
 
 **Boss Music:**
-- **Phase 1:** Heavy, percussive music with deep drums
-- **Phase 2:** Adds driving guitar and faster tempo during eruptions
-- **Phase 3:** Intense heavy metal with complex percussion
+- **Phase 1:** Heavy, percussive music with deep drums and volcanic sounds
+- **Phase 2:** Adds driving guitar and faster tempo during eruptions with intense percussion
+- **Phase 3:** Intense heavy metal with complex percussion and volcanic sound effects
 - **Overall Theme:** "Volcanic Fury" - 120 BPM, E minor, heavy percussion and guitar focus
 
 ---
 
 ### 14. Cyber Overlord
 **Visual Appearance:**
-- Massive AI entity with multiple robotic forms
-- Glowing circuits and energy conduits across body
-- Multiple floating drone units
-- Holographic displays showing complex data
+- Massive AI entity with multiple robotic forms that evolve
+- Glowing circuits and energy conduits across body that pulse with power
+- Multiple floating drone units with targeting systems
+- Holographic displays showing complex data and player patterns
 - Creates digital and electromagnetic effects
+- Matrix glitch effects in final stage
+- Learning indicators show adaptive behavior
+
+**Attack Descriptions & Visual Effects:**
+
+**Basic AI (Stage 1):**
+- **Drone Swarm Attack:** 4 red drones deploy and orbit around boss, each drone showing targeting lines to player and firing red energy bullets. One drone is marked as leader with yellow outline.
+
+**Adaptive AI (Stage 2):**
+- **Adaptive Laser Attack:** Predictive targeting system analyzes player movement patterns, creating red telegraph markers at predicted positions, then firing homing lasers that adjust trajectory toward predicted locations.
+
+**Sentient AI (Stage 3):**
+- **Matrix Glitch Attack:** Reality glitches with 24 random attack patterns:
+  - **Glitch Lasers:** Purple laser projectiles spawn randomly across screen
+  - **Glitch Drones:** Drones appear at random positions
+  - **Data Corruption:** Visual distortion effects with purple glitch squares
+- Screen fills with purple glitch artifacts and distortion patterns
+
+**Visual Effects:**
+- Drones orbit boss in predictable patterns
+- Targeting lines show drone lock-on
+- Predictive targeting markers show AI learning
+- Matrix glitch effects create visual distortion
+- Purple glitch squares appear during ultimate attacks
+- Circuit patterns glow on boss body
+- Holographic data displays during attacks
 
 **Sound Effects:**
-- Computer processing and data stream sounds
-- Mechanical whirring and servo sounds
-- Electronic beeps and system sounds
-- Energy discharge sounds
+- Computer processing and data stream sounds with electronic beeping
+- Mechanical whirring and servo sounds during drone movement
+- Electronic beeps and system sounds for targeting
+- Energy discharge sounds during laser attacks
 - Digital voice samples for communications
+- Glitch sounds and digital artifacts during matrix attacks
+- Electronic processing sounds during learning phases
 
 **Boss Music:**
-- **Phase 1:** Complex electronic with multiple layers
-- **Phase 2:** Adds aggressive electronic elements and faster tempo
-- **Phase 3:** Intense electronic music with complex rhythms
+- **Phase 1 (Basic AI):** Complex electronic with multiple layers and processing sounds
+- **Phase 2 (Adaptive AI):** Adds aggressive electronic elements and faster tempo with learning indicators
+- **Phase 3 (Sentient AI):** Intense electronic music with complex rhythms and glitch effects
 - **Overall Theme:** "Digital Ascension" - 140 BPM, B minor, heavy electronic and processing sounds
 
 ---
