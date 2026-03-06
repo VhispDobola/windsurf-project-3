@@ -341,7 +341,6 @@ class NetworkHost:
                 except OSError:
                     stale.append((player_index, sock))
 
-<<<<<<< HEAD
             if stale:
                 with self._lock:
                     for player_index, sock in stale:
@@ -357,13 +356,6 @@ class NetworkHost:
 
     def _send_to_clients(self, message, blob=b""):
         disconnected = []
-=======
-        def get_connected_player_indices(self):
-        with self._lock:
-            return sorted(self.clients.keys())
-
-    def send_frame(self, screen_surface, pygame_module):
->>>>>>> 1afbd43416aae4bc928e1581948626bf5e3fd3e7
         with self._lock:
             items = list(self.clients.items())
         for player_index, info in items:

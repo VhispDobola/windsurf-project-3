@@ -204,9 +204,6 @@ class Game:
             requested_count = default_player_count
 
         player_count = max(1, min(4, requested_count))
-        center_x = WIDTH // 2 - 15
-        base_y = HEIGHT - 100
-        spawn_offsets = [-120, -40, 40, 120]
         while len(self.player_customizations) < player_count:
             self.player_customizations.append(
                 self._default_customization(len(self.player_customizations))
@@ -218,22 +215,14 @@ class Game:
 
         self.player = self.players[0]
         self._prime_player_tracking()
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 1afbd43416aae4bc928e1581948626bf5e3fd3e7
     def _create_player(self, player_index):
         center_x = WIDTH // 2 - 15
         base_y = HEIGHT - 100
         spawn_offsets = [-120, -40, 40, 120]
-<<<<<<< HEAD
         offset = (
             spawn_offsets[player_index] if 0 <= player_index < len(spawn_offsets) else 0
         )
-=======
-        offset = spawn_offsets[player_index] if 0 <= player_index < len(spawn_offsets) else 0
->>>>>>> 1afbd43416aae4bc928e1581948626bf5e3fd3e7
         px = max(0, min(WIDTH - 30, center_x + offset))
         player = Player(px, base_y)
         player._game_ref = self
@@ -241,11 +230,7 @@ class Game:
         player.input_profile = self.control_profiles[player_index]
         self._apply_customization_to_player(player, player_index)
         return player
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 1afbd43416aae4bc928e1581948626bf5e3fd3e7
     def _default_customization(self, index):
         return default_customization(self, index)
 
@@ -299,27 +284,6 @@ class Game:
                 "shoot_mouse": False,
             },
         ]
-        
-    def _sync_network_player_roster(self):
-        if self.network_mode != "host" or not self.network_host:
-            return
-
-        connected_remote = self.network_host.get_connected_player_indices()
-        connected_remote = [idx for idx in connected_remote if 1 <= idx <= 3]
-        desired_indices = [0] + connected_remote
-        current_indices = sorted(player.player_index for player in self.players)
-        if current_indices == sorted(desired_indices):
-            return
-
-        current_by_index = {player.player_index: player for player in self.players}
-        for idx in desired_indices:
-            if idx not in current_by_index:
-                current_by_index[idx] = self._create_player(idx)
-
-        self.players = [current_by_index[idx] for idx in sorted(desired_indices)]
-        self.player = next((p for p in self.players if p.player_index == 0), self.players[0])
-        self.customization_player_index = min(self.customization_player_index, max(0, len(self.players) - 1))
-        self._prime_player_tracking()
 
     def _sync_network_player_roster(self):
         if self.network_mode != "host" or not self.network_host:
