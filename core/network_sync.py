@@ -152,6 +152,10 @@ class NetworkHost:
         with self._lock:
             return dict(self.input_states.get(player_index, {}))
 
+    def get_connected_player_indices(self):
+        with self._lock:
+            return sorted(self.clients.keys())
+
     def send_frame(self, screen_surface, pygame_module):
         with self._lock:
             client_items = list(self.clients.items())
