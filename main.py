@@ -92,6 +92,7 @@ class Game:
         self.customization_field_index = 0
         self.players = []
         self.player = None
+        self.control_profiles = self._build_player_control_profiles()
         self._init_players()
         self.current_boss = None
         self.current_bosses = []  # Support multiple bosses
@@ -167,7 +168,7 @@ class Game:
 
     def _init_players(self):
         """Initialize local multiplayer roster and per-player input profiles."""
-        default_player_count = 4 if self.network_mode == "host" else 1
+        default_player_count = 1
         requested_count = default_player_count
         try:
             requested_count = int(os.getenv("BOSS_RUSH_PLAYERS", str(default_player_count)))
@@ -181,20 +182,26 @@ class Game:
         while len(self.player_customizations) < player_count:
             self.player_customizations.append(self._default_customization(len(self.player_customizations)))
 
-        control_profiles = self._build_player_control_profiles()
         self.players = []
         for i in range(player_count):
-            px = max(0, min(WIDTH - 30, center_x + spawn_offsets[i]))
-            player = Player(px, base_y)
-            player._game_ref = self
-            player.player_index = i
-            player.input_profile = control_profiles[i]
-            self._apply_customization_to_player(player, i)
-            self.players.append(player)
+            self.players.append(self._create_player(i))
 
         self.player = self.players[0]
         self._prime_player_tracking()
-
+        
+    def _create_player(self, player_index):
+        center_x = WIDTH // 2 - 15
+        base_y = HEIGHT - 100
+        spawn_offsets = [-120, -40, 40, 120]
+        offset = spawn_offsets[player_index] if 0 <= player_index < len(spawn_offsets) else 0
+        px = max(0, min(WIDTH - 30, center_x + offset))
+        player = Player(px, base_y)
+        player._game_ref = self
+        player.player_index = player_index
+        player.input_profile = self.control_profiles[player_index]
+        self._apply_customization_to_player(player, player_index)
+        return player
+        
     def _default_customization(self, index):
         default_colors = [BLUE, CYAN, ORANGE, GREEN]
         return {
@@ -256,6 +263,27 @@ class Game:
                 "shoot_mouse": False,
             },
         ]
+        
+    def _sync_network_player_roster(self):
+        if self.network_mode != "host" or not self.network_host:
+            return
+
+        connected_remote = self.network_host.get_connected_player_indices()
+        connected_remote = [idx for idx in connected_remote if 1 <= idx <= 3]
+        desired_indices = [0] + connected_remote
+        current_indices = sorted(player.player_index for player in self.players)
+        if current_indices == sorted(desired_indices):
+            return
+
+        current_by_index = {player.player_index: player for player in self.players}
+        for idx in desired_indices:
+            if idx not in current_by_index:
+                current_by_index[idx] = self._create_player(idx)
+
+        self.players = [current_by_index[idx] for idx in sorted(desired_indices)]
+        self.player = next((p for p in self.players if p.player_index == 0), self.players[0])
+        self.customization_player_index = min(self.customization_player_index, max(0, len(self.players) - 1))
+        self._prime_player_tracking()
 
     def get_alive_players(self):
         return [p for p in self.players if p.health > 0]
@@ -698,6 +726,8 @@ class Game:
         self.bottom_camp_frames[id(biggest_camper)] = 30
                 
     def update(self):
+        self._sync_network_player_roster()
+
         if self.state == GameState.FIGHTING:
             self.collision_system.update_bounds(self.screen.get_width(), self.screen.get_height())
             keys = pygame.key.get_pressed()
