@@ -2,8 +2,7 @@ import json
 import os
 import logging
 from datetime import datetime
-from typing import Dict, List, Tuple
-import math
+from typing import Dict, List
 
 class AutoBalanceSystem:
     def __init__(self, data_file="data/boss_performance_log.json"):
