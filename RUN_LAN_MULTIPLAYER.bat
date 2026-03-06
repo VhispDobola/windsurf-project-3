@@ -32,12 +32,16 @@ if not defined PYTHON_CMD (
 )
 
 echo  Using: %PYTHON_CMD%
-echo  Installing dependencies...
-%PYTHON_CMD% -m pip install -r requirements.txt --user >nul 2>&1
+echo  Checking dependencies...
+%PYTHON_CMD% -c "import pygame" >nul 2>&1
 if errorlevel 1 (
-    echo  Dependency install failed. Check internet access and pip.
-    pause
-    exit /b 1
+    echo  Installing dependencies...
+    %PYTHON_CMD% -m pip install -r requirements.txt --user >nul 2>&1
+    if errorlevel 1 (
+        echo  Dependency install failed. Check internet access and pip.
+        pause
+        exit /b 1
+    )
 )
 
 echo.
@@ -46,13 +50,15 @@ echo    1) Host (Player 1 on this PC)
 echo    2) Client Player 2
 echo    3) Client Player 3
 echo    4) Client Player 4
+echo    5) Client Auto Slot
 echo.
-set /p MODE_CHOICE=Enter choice (1-4): 
+set /p MODE_CHOICE=Enter choice (1-5): 
 
 if "%MODE_CHOICE%"=="1" goto :host
 if "%MODE_CHOICE%"=="2" goto :client2
 if "%MODE_CHOICE%"=="3" goto :client3
 if "%MODE_CHOICE%"=="4" goto :client4
+if "%MODE_CHOICE%"=="5" goto :client_auto
 
 echo  Invalid choice.
 pause
@@ -85,6 +91,10 @@ goto :client_common
 
 :client4
 set SLOT=4
+goto :client_common
+
+:client_auto
+set SLOT=auto
 goto :client_common
 
 :client_common

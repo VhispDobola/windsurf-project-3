@@ -203,17 +203,6 @@ class CollisionSystem:
                 return name
         return getattr(obj, 'ability_name', None)
 
-    def _get_hazard_rect(self, hazard):
-        """Create a rect for a hazard dict if possible"""
-        if 'radius' in hazard:
-            radius = hazard['radius']
-            return pygame.Rect(hazard['x'] - radius, hazard['y'] - radius, radius * 2, radius * 2)
-        if 'width' in hazard and 'height' in hazard:
-            return pygame.Rect(hazard['x'] - hazard['width'] // 2,
-                               hazard['y'] - hazard['height'] // 2,
-                               hazard['width'], hazard['height'])
-        return None
-    
     def _update_hazard_cooldowns(self, boss):
         """Update hazard damage cooldowns"""
         cooldown_dict = getattr(boss, 'hazard_damage_cooldown', self.hazard_cooldowns)

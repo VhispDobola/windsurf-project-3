@@ -1,38 +1,46 @@
-import pygame
-import random
-import math
+import json
 import os
-import zlib
-from core import Player, RenderLayer
-from core.effect import Telegraph
-from ui import UIManager
-from utils import PerformanceLogger
-from core import ArenaRenderer, BossManager
-from utils import position_boss_pair
-from core.game_state import GameState, StateManager
-from core.collision_system import CollisionSystem
-from core.damage_numbers import DamageNumberManager
-from core.upgrade_system import UpgradeSystem
-from core.render_system import RenderSystem, ScreenShakeEffect
+import random
+import time
+from datetime import datetime
+
+import pygame
+
+from config.constants import (
+    BOSS_INTRO_DURATION,
+    FPS,
+    HEAL_AFTER_BOSS_PERCENTAGE,
+    HEIGHT,
+    UPGRADE_CARD_GAP,
+    UPGRADE_CARD_HEIGHT,
+    UPGRADE_CARD_WIDTH,
+    UPGRADE_COUNT,
+    WIDTH,
+    init_pygame,
+)
+from core import ArenaRenderer, BossManager, Player
 from core.audio_manager import AudioManager
 from core.auto_balance import AutoBalanceSystem
-from core.network_sync import NetworkHost, NetworkClient
+from core.collision_system import CollisionSystem
+from core.damage_numbers import DamageNumberManager
+from core.effect import Telegraph
+from core.game_customization_helpers import (
+    apply_customization_to_player,
+    default_customization,
+    handle_customization_key,
+)
+from core.game_render_helpers import (
+    draw as draw_game,
+)
+from core.game_state import GameState, StateManager
+from core.network_client_runner import run_network_client
+from core.network_sync import NetworkHost
+from core.render_system import RenderSystem, ScreenShakeEffect
+from core.upgrade_system import UpgradeSystem
+from ui import UIManager
+from utils import PerformanceLogger, position_boss_pair
 from utils.error_handler import GameErrorHandler, validate_game_config
-from config.constants import (
-    WIDTH, HEIGHT, FPS, BLACK, YELLOW, BLUE, CYAN, ORANGE, GREEN,
-    init_pygame,
-    BOSS_INTRO_DURATION,
-    HEAL_AFTER_BOSS_PERCENTAGE, UPGRADE_COUNT, UPGRADE_CARD_WIDTH, 
-    UPGRADE_CARD_HEIGHT, UPGRADE_CARD_GAP
-)
 
-# Import all bosses
-from bosses import (
-    EternalGuardian, BladeMaster, NexusCore, VoidAssassin, 
-    Chronomancer, TheVirusQueen, TempestLord, ThunderEmperor,
-    ImmortalPhoenix, CrystallineDestroyer, EternalDragon,
-    IceTyrant, MagmaSovereign, CyberOverlord
-)
 
 class Game:
     def __init__(self):
@@ -45,10 +53,10 @@ class Game:
             self.error_handler.logger.warning("Configuration errors found:")
             for error in config_errors:
                 self.error_handler.logger.warning("  - %s", error)
-        
+
         # Initialize pygame first
         self.error_handler.safe_pygame_operation(init_pygame)
-        
+
         self.fullscreen = False
         self._windowed_size = (WIDTH, HEIGHT)
         self.screen = self.error_handler.safe_pygame_operation(
@@ -63,8 +71,15 @@ class Game:
         self.network_mode = os.getenv("BOSS_RUSH_NETWORK_MODE", "off").strip().lower()
         self.network_host_ip = os.getenv("BOSS_RUSH_HOST", "0.0.0.0").strip()
         self.network_port = int(os.getenv("BOSS_RUSH_PORT", "50000"))
+        self.network_sync_mode = (
+            os.getenv("BOSS_RUSH_SYNC_MODE", "frame").strip().lower()
+        )
+        self.network_stream_fps = int(os.getenv("BOSS_RUSH_STREAM_FPS", "30"))
+        self.network_zlib_level = int(os.getenv("BOSS_RUSH_STREAM_ZLIB", "1"))
         self.network_host = None
-        
+        self.replay_log_enabled = os.getenv("BOSS_RUSH_REPLAY_LOG", "0").strip() == "1"
+        self.replay_log_frames = []
+
         self.ui_manager = UIManager()
         self.state_manager = StateManager()
         self.performance_logger = PerformanceLogger()
@@ -79,12 +94,12 @@ class Game:
         self.damage_numbers = DamageNumberManager()
         self.state_manager.change_state(GameState.MENU)
         self.color_options = [
-            (0, 100, 255),   # blue
-            (0, 220, 180),   # teal
-            (255, 170, 0),   # orange
+            (0, 100, 255),  # blue
+            (0, 220, 180),  # teal
+            (255, 170, 0),  # orange
             (120, 240, 90),  # green
-            (245, 80, 90),   # red
-            (210, 110, 255), # violet
+            (245, 80, 90),  # red
+            (210, 110, 255),  # violet
         ]
         self.hat_options = ["None", "Cap", "Crown", "Beanie"]
         self.player_customizations = []
@@ -98,11 +113,13 @@ class Game:
         self.current_bosses = []  # Support multiple bosses
         self.boss_manager = BossManager()
         if getattr(self.boss_manager, "balance_notes", None):
-            self.error_handler.logger.info("Auto-balance adjustments (from latest performance log):")
+            self.error_handler.logger.info(
+                "Auto-balance adjustments (from latest performance log):"
+            )
             for note in self.boss_manager.balance_notes:
                 self.error_handler.logger.info("  - %s", note)
         self._check_boss_name_consistency()
-        
+
         self.score = 0
         self.fight_start_time = 0
         self.total_time = 0
@@ -114,15 +131,15 @@ class Game:
         self.pressure_cooldown = 0
         self.last_player_pos = {}
         self._prime_player_tracking()
-        
+
         # Flags to prevent repeated operations
         self.victory_analysis_printed = False
         self.game_over_analysis_printed = False
         self.hovered_upgrade_index = -1
-        
+
         # Initialize auto-balance system
         self.auto_balance = AutoBalanceSystem()
-        
+
         self.arena_seed = 1
         self.arena_style = "default"
         self.boss_hints = {
@@ -158,12 +175,21 @@ class Game:
         }
 
         if self.network_mode == "host":
-            self.network_host = NetworkHost(self.network_host_ip, self.network_port, max_remote_players=3)
-            self.network_host.start()
-            self.error_handler.logger.info(
-                "LAN host mode enabled on %s:%s",
+            self.network_host = NetworkHost(
                 self.network_host_ip,
                 self.network_port,
+                max_remote_players=3,
+                stream_fps=self.network_stream_fps,
+                sync_mode=self.network_sync_mode,
+                zlib_level=self.network_zlib_level,
+            )
+            self.network_host.start()
+            self.error_handler.logger.info(
+                "LAN host mode enabled on %s:%s (sync=%s, fps=%s)",
+                self.network_host_ip,
+                self.network_port,
+                self.network_sync_mode,
+                self.network_stream_fps,
             )
 
     def _init_players(self):
@@ -171,7 +197,9 @@ class Game:
         default_player_count = 1
         requested_count = default_player_count
         try:
-            requested_count = int(os.getenv("BOSS_RUSH_PLAYERS", str(default_player_count)))
+            requested_count = int(
+                os.getenv("BOSS_RUSH_PLAYERS", str(default_player_count))
+            )
         except ValueError:
             requested_count = default_player_count
 
@@ -180,7 +208,9 @@ class Game:
         base_y = HEIGHT - 100
         spawn_offsets = [-120, -40, 40, 120]
         while len(self.player_customizations) < player_count:
-            self.player_customizations.append(self._default_customization(len(self.player_customizations)))
+            self.player_customizations.append(
+                self._default_customization(len(self.player_customizations))
+            )
 
         self.players = []
         for i in range(player_count):
@@ -193,7 +223,9 @@ class Game:
         center_x = WIDTH // 2 - 15
         base_y = HEIGHT - 100
         spawn_offsets = [-120, -40, 40, 120]
-        offset = spawn_offsets[player_index] if 0 <= player_index < len(spawn_offsets) else 0
+        offset = (
+            spawn_offsets[player_index] if 0 <= player_index < len(spawn_offsets) else 0
+        )
         px = max(0, min(WIDTH - 30, center_x + offset))
         player = Player(px, base_y)
         player._game_ref = self
@@ -203,18 +235,10 @@ class Game:
         return player
 
     def _default_customization(self, index):
-        default_colors = [BLUE, CYAN, ORANGE, GREEN]
-        return {
-            "username": f"P{index + 1}",
-            "color": default_colors[index % len(default_colors)],
-            "hat": "None",
-        }
+        return default_customization(self, index)
 
     def _apply_customization_to_player(self, player, player_index):
-        profile = self.player_customizations[player_index]
-        player.color = profile.get("color", BLUE)
-        player.username = profile.get("username", f"P{player_index + 1}")
-        player.hat_style = profile.get("hat", "None")
+        return apply_customization_to_player(self, player, player_index)
 
     def _build_player_control_profiles(self):
         return [
@@ -281,8 +305,12 @@ class Game:
                 current_by_index[idx] = self._create_player(idx)
 
         self.players = [current_by_index[idx] for idx in sorted(desired_indices)]
-        self.player = next((p for p in self.players if p.player_index == 0), self.players[0])
-        self.customization_player_index = min(self.customization_player_index, max(0, len(self.players) - 1))
+        self.player = next(
+            (p for p in self.players if p.player_index == 0), self.players[0]
+        )
+        self.customization_player_index = min(
+            self.customization_player_index, max(0, len(self.players) - 1)
+        )
         self._prime_player_tracking()
 
     def get_alive_players(self):
@@ -300,12 +328,17 @@ class Game:
         actor_cy = actor.y + getattr(actor, "height", 0) * 0.5
         return min(
             alive_players,
-            key=lambda p: ((p.x + p.width * 0.5 - actor_cx) ** 2 + (p.y + p.height * 0.5 - actor_cy) ** 2),
+            key=lambda p: (
+                (p.x + p.width * 0.5 - actor_cx) ** 2
+                + (p.y + p.height * 0.5 - actor_cy) ** 2
+            ),
         )
 
     def _prime_player_tracking(self):
         self.bottom_camp_frames = {id(player): 0 for player in self.players}
-        self.last_player_pos = {id(player): (player.x, player.y) for player in self.players}
+        self.last_player_pos = {
+            id(player): (player.x, player.y) for player in self.players
+        }
 
     def _is_any_key_pressed(self, keys, bindings):
         return any(keys[key] for key in bindings)
@@ -332,119 +365,115 @@ class Game:
             return (player.x + player.width // 2, player.y - 100)
         target_boss = min(
             self.current_bosses,
-            key=lambda boss: ((boss.x + boss.width * 0.5 - (player.x + player.width * 0.5)) ** 2 +
-                              (boss.y + boss.height * 0.5 - (player.y + player.height * 0.5)) ** 2),
+            key=lambda boss: (
+                (boss.x + boss.width * 0.5 - (player.x + player.width * 0.5)) ** 2
+                + (boss.y + boss.height * 0.5 - (player.y + player.height * 0.5)) ** 2
+            ),
         )
         target_x = int(target_boss.x + target_boss.width * 0.5)
         target_y = int(target_boss.y + target_boss.height * 0.5)
         return (target_x, target_y)
 
-    def _cycle_color(self, direction):
-        if not self.players:
-            return
-        idx = self.customization_player_index
-        current = self.players[idx].color
-        try:
-            current_idx = self.color_options.index(current)
-        except ValueError:
-            current_idx = 0
-        new_idx = (current_idx + direction) % len(self.color_options)
-        new_color = self.color_options[new_idx]
-        self.players[idx].color = new_color
-        self.player_customizations[idx]["color"] = new_color
+    def _build_network_world_state(self):
+        players = []
+        for player in self.players:
+            players.append(
+                {
+                    "slot": int(getattr(player, "player_index", 0)) + 1,
+                    "x": int(player.x),
+                    "y": int(player.y),
+                    "hp": int(player.health),
+                    "max_hp": int(player.max_health),
+                }
+            )
+        bosses = []
+        for boss in self.current_bosses:
+            bosses.append(
+                {
+                    "name": str(getattr(boss, "name", "Boss")),
+                    "x": int(getattr(boss, "x", 0)),
+                    "y": int(getattr(boss, "y", 0)),
+                    "hp": int(getattr(boss, "health", 0)),
+                    "max_hp": int(getattr(boss, "max_health", 1)),
+                }
+            )
+        return {
+            "game_state": str(self.state.value),
+            "score": int(self.score),
+            "players": players,
+            "bosses": bosses,
+        }
 
-    def _cycle_hat(self, direction):
-        if not self.players:
+    def _record_replay_frame(self):
+        if not self.replay_log_enabled:
             return
-        idx = self.customization_player_index
-        current_hat = self.players[idx].hat_style
-        try:
-            current_idx = self.hat_options.index(current_hat)
-        except ValueError:
-            current_idx = 0
-        new_idx = (current_idx + direction) % len(self.hat_options)
-        new_hat = self.hat_options[new_idx]
-        self.players[idx].hat_style = new_hat
-        self.player_customizations[idx]["hat"] = new_hat
+        frame = {
+            "t": round(time.time(), 3),
+            "state": self.state.value,
+            "score": int(self.score),
+            "players": [
+                {
+                    "slot": int(getattr(player, "player_index", 0)) + 1,
+                    "x": round(float(player.x), 2),
+                    "y": round(float(player.y), 2),
+                    "hp": int(player.health),
+                }
+                for player in self.players
+            ],
+            "bosses": [
+                {
+                    "name": str(getattr(boss, "name", "Boss")),
+                    "x": round(float(getattr(boss, "x", 0)), 2),
+                    "y": round(float(getattr(boss, "y", 0)), 2),
+                    "hp": int(getattr(boss, "health", 0)),
+                }
+                for boss in self.current_bosses
+            ],
+        }
+        if self.network_mode == "host" and self.network_host:
+            frame["inputs"] = {
+                str(slot + 1): self.network_host.get_player_input(slot)
+                for slot in self.network_host.get_connected_player_indices()
+            }
+        self.replay_log_frames.append(frame)
 
-    def _append_username_char(self, char):
-        if not self.players:
+    def _flush_replay_log(self):
+        if not self.replay_log_enabled or not self.replay_log_frames:
             return
-        if not char:
-            return
-        if not (char.isalnum() or char in (" ", "_", "-")):
-            return
-        idx = self.customization_player_index
-        current = self.players[idx].username or ""
-        if len(current) >= 16:
-            return
-        updated = current + char
-        self.players[idx].username = updated
-        self.player_customizations[idx]["username"] = updated
-
-    def _remove_username_char(self):
-        if not self.players:
-            return
-        idx = self.customization_player_index
-        current = self.players[idx].username or ""
-        updated = current[:-1]
-        if not updated:
-            updated = f"P{idx + 1}"
-        self.players[idx].username = updated
-        self.player_customizations[idx]["username"] = updated
+        os.makedirs("logs", exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = os.path.join("logs", f"replay_{ts}.json")
+        payload = {
+            "created_at": datetime.now().isoformat(),
+            "network_mode": self.network_mode,
+            "sync_mode": self.network_sync_mode,
+            "frames": self.replay_log_frames,
+        }
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
 
     def _handle_customization_key(self, event):
-        if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
-            self.state = GameState.MENU
-            return
-
-        if event.key == pygame.K_TAB:
-            self.customization_player_index = (self.customization_player_index + 1) % len(self.players)
-            return
-        if event.key == pygame.K_UP:
-            self.customization_field_index = (self.customization_field_index - 1) % 3
-            return
-        if event.key == pygame.K_DOWN:
-            self.customization_field_index = (self.customization_field_index + 1) % 3
-            return
-
-        if self.customization_field_index == 0:
-            if event.key == pygame.K_BACKSPACE:
-                self._remove_username_char()
-            else:
-                self._append_username_char(event.unicode)
-            return
-
-        if self.customization_field_index == 1:
-            if event.key == pygame.K_LEFT:
-                self._cycle_color(-1)
-            elif event.key == pygame.K_RIGHT:
-                self._cycle_color(1)
-            return
-
-        if self.customization_field_index == 2:
-            if event.key == pygame.K_LEFT:
-                self._cycle_hat(-1)
-            elif event.key == pygame.K_RIGHT:
-                self._cycle_hat(1)
+        return handle_customization_key(self, event)
 
     def _check_boss_name_consistency(self):
         mismatches = self.boss_manager.validate_boss_name_consistency()
         if mismatches:
             self.error_handler.logger.warning("Boss name consistency warnings:")
             for class_name, actual, expected in mismatches:
-                self.error_handler.logger.warning("  - %s: '%s' -> '%s'", class_name, actual, expected)
-        
+                self.error_handler.logger.warning(
+                    "  - %s: '%s' -> '%s'", class_name, actual, expected
+                )
+
     @property
     def state(self):
         """Get current game state"""
         return self.state_manager.current_state
-    
+
     @state.setter
     def state(self, value):
         """Set game state"""
         self.state_manager.change_state(value)
-        
+
     def toggle_fullscreen(self):
         """Toggle between fullscreen and windowed mode with error handling"""
         current_surface = pygame.display.get_surface()
@@ -455,7 +484,9 @@ class Game:
             if self.fullscreen:
                 self.fullscreen = False
                 self.screen = pygame.display.set_mode(self._windowed_size)
-                self.collision_system.update_bounds(self.screen.get_width(), self.screen.get_height())
+                self.collision_system.update_bounds(
+                    self.screen.get_width(), self.screen.get_height()
+                )
                 return True
 
             if pygame.display.get_driver() in ("x11", "wayland"):
@@ -466,8 +497,12 @@ class Game:
 
             info = pygame.display.Info()
             self.fullscreen = True
-            self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
-            self.collision_system.update_bounds(self.screen.get_width(), self.screen.get_height())
+            self.screen = pygame.display.set_mode(
+                (info.current_w, info.current_h), pygame.FULLSCREEN
+            )
+            self.collision_system.update_bounds(
+                self.screen.get_width(), self.screen.get_height()
+            )
             return True
 
         result = self.error_handler.safe_pygame_operation(toggle_operation)
@@ -477,7 +512,9 @@ class Game:
                 lambda: pygame.display.set_mode(self._windowed_size)
             )
         if self.screen:
-            self.collision_system.update_bounds(self.screen.get_width(), self.screen.get_height())
+            self.collision_system.update_bounds(
+                self.screen.get_width(), self.screen.get_height()
+            )
 
     def reset_game(self):
         """Reset game for a new run"""
@@ -487,7 +524,7 @@ class Game:
         self.current_boss = None
         self.current_bosses = []
         self.boss_manager.reset()
-        
+
         self.score = 0
         self.total_time = 0
         self.intro_timer = 0
@@ -504,7 +541,7 @@ class Game:
         self.collision_system = CollisionSystem(self.performance_logger, WIDTH, HEIGHT)
         self.render_system.clear_batches()
         self.damage_numbers.clear()
-        
+
     def start_boss_fight(self):
         # Check if we should have single or paired bosses
         if self.boss_manager.bosses_defeated_count < 10:
@@ -514,25 +551,28 @@ class Game:
                 self.current_boss = boss
                 self.current_bosses = [boss]
                 boss.game = self
-                
+
                 # Apply auto-balance adjustments
                 adjustments = self.auto_balance.get_boss_adjustments(boss.name)
                 if adjustments:
                     boss.apply_balance_adjustments(adjustments)
                     self.auto_balance.log_balance_change(boss.name, adjustments)
-                
+
                 self.state = GameState.BOSS_INTRO
                 self.intro_timer = BOSS_INTRO_DURATION
                 self.fight_start_time = pygame.time.get_ticks() / 1000
-                
-                self.arena_seed = (pygame.time.get_ticks() + self.boss_manager.bosses_defeated_count * 1337) & 0xFFFFFFFF
+
+                self.arena_seed = (
+                    pygame.time.get_ticks()
+                    + self.boss_manager.bosses_defeated_count * 1337
+                ) & 0xFFFFFFFF
                 self.arena_style = self._get_arena_style(boss)
-                
+
                 # Reset flags for new fight
                 self.victory_analysis_printed = False
                 self.game_over_analysis_printed = False
                 self._play_boss_music([boss])
-                
+
                 self.performance_logger.start_boss_fight(boss.name)
             else:
                 self.state = GameState.VICTORY
@@ -542,31 +582,36 @@ class Game:
             if boss1 and boss2:
                 # Position bosses on screen
                 boss1, boss2 = position_boss_pair(boss1, boss2, WIDTH, HEIGHT)
-                
+
                 self.current_boss = boss1  # Keep for compatibility
                 self.current_bosses = [boss1, boss2]
-                
+
                 for boss in self.current_bosses:
                     boss.game = self
-                    
+
                     # Apply auto-balance adjustments
                     adjustments = self.auto_balance.get_boss_adjustments(boss.name)
                     if adjustments:
                         boss.apply_balance_adjustments(adjustments)
                         self.auto_balance.log_balance_change(boss.name, adjustments)
-                
+
                 self.state = GameState.BOSS_INTRO
                 self.intro_timer = BOSS_INTRO_DURATION
                 self.fight_start_time = pygame.time.get_ticks() / 1000
-                
-                self.arena_seed = (pygame.time.get_ticks() + self.boss_manager.bosses_defeated_count * 1337) & 0xFFFFFFFF
-                self.arena_style = self._get_arena_style(boss1)  # Use first boss for arena style
-                
+
+                self.arena_seed = (
+                    pygame.time.get_ticks()
+                    + self.boss_manager.bosses_defeated_count * 1337
+                ) & 0xFFFFFFFF
+                self.arena_style = self._get_arena_style(
+                    boss1
+                )  # Use first boss for arena style
+
                 # Reset flags for new fight
                 self.victory_analysis_printed = False
                 self.game_over_analysis_printed = False
                 self._play_boss_music(self.current_bosses)
-                
+
                 for boss in self.current_bosses:
                     self.performance_logger.start_boss_fight(boss.name)
             else:
@@ -607,7 +652,9 @@ class Game:
             player.health = min(player.max_health, player.health + heal_amount)
 
     def open_upgrade_screen(self):
-        upgrade_anchor = self.get_alive_players()[0] if self.get_alive_players() else self.player
+        upgrade_anchor = (
+            self.get_alive_players()[0] if self.get_alive_players() else self.player
+        )
         self.pending_upgrades = self.upgrade_system.get_random_upgrades(upgrade_anchor)
         self.audio_manager.stop_music()
         self.state = GameState.UPGRADE
@@ -615,7 +662,7 @@ class Game:
     def get_hovered_upgrade_index(self, mouse_pos):
         if not self.pending_upgrades:
             return -1
-            
+
         cards = self.pending_upgrades[:UPGRADE_COUNT]
         card_w = UPGRADE_CARD_WIDTH
         card_h = UPGRADE_CARD_HEIGHT
@@ -623,15 +670,15 @@ class Game:
         total_w = (card_w * UPGRADE_COUNT) + (gap * (UPGRADE_COUNT - 1))
         start_x = (self.screen.get_width() - total_w) // 2
         y = self.screen.get_height() // 2 - card_h // 2 + 30
-        
+
         mx, my = mouse_pos
-        
+
         for i in range(len(cards)):
             x = start_x + i * (card_w + gap)
             rect = pygame.Rect(x, y, card_w, card_h)
             if rect.collidepoint(mx, my):
                 return i
-        
+
         return -1
 
     def apply_upgrade(self, upgrade_index):
@@ -646,7 +693,7 @@ class Game:
 
         if upgrade_index < 0 or upgrade_index >= len(self.pending_upgrades):
             return
-        
+
         try:
             upgrade = self.pending_upgrades[upgrade_index]
             apply_to = upgrade.get("apply_to")
@@ -671,12 +718,12 @@ class Game:
             self.start_boss_fight()
         except Exception as e:
             self.error_handler.logger.error(f"Error applying upgrade: {e}")
-            
+
     def handle_collisions(self):
         """Handle collisions using the collision system"""
         if not self.current_bosses:
             return
-        
+
         self.collision_system.handle_collisions(self.players, self.current_bosses)
 
     def _apply_anti_camp_pressure(self):
@@ -694,7 +741,9 @@ class Game:
         for player in self.get_alive_players():
             pid = id(player)
             lx, ly = self.last_player_pos.get(pid, (player.x, player.y))
-            moved_sq = (player.x - lx) * (player.x - lx) + (player.y - ly) * (player.y - ly)
+            moved_sq = (player.x - lx) * (player.x - lx) + (player.y - ly) * (
+                player.y - ly
+            )
             self.last_player_pos[pid] = (player.x, player.y)
 
             in_bottom_zone = player.y > int(screen_h * 0.62)
@@ -714,22 +763,36 @@ class Game:
         if biggest_camper is None or biggest_frames < 75 or self.pressure_cooldown > 0:
             return
 
-        target_x = biggest_camper.x + biggest_camper.width // 2 + random.randint(-20, 20)
-        target_y = biggest_camper.y + biggest_camper.height // 2 + random.randint(-20, 20)
+        target_x = (
+            biggest_camper.x + biggest_camper.width // 2 + random.randint(-20, 20)
+        )
+        target_y = (
+            biggest_camper.y + biggest_camper.height // 2 + random.randint(-20, 20)
+        )
         for boss in self.current_bosses:
-            t = Telegraph(target_x, target_y, 50, 50, (255, 120, 60), damage=8, warning_type="pulse")
+            t = Telegraph(
+                target_x,
+                target_y,
+                50,
+                50,
+                (255, 120, 60),
+                damage=8,
+                warning_type="pulse",
+            )
             t.active_start = 28
             t.active_end = 50
             boss.effects.append(t)
 
         self.pressure_cooldown = 150
         self.bottom_camp_frames[id(biggest_camper)] = 30
-                
+
     def update(self):
         self._sync_network_player_roster()
 
         if self.state == GameState.FIGHTING:
-            self.collision_system.update_bounds(self.screen.get_width(), self.screen.get_height())
+            self.collision_system.update_bounds(
+                self.screen.get_width(), self.screen.get_height()
+            )
             keys = pygame.key.get_pressed()
             mouse_pressed = pygame.mouse.get_pressed()
             mx, my = pygame.mouse.get_pos()
@@ -738,7 +801,9 @@ class Game:
                 if player.health <= 0:
                     continue
 
-                profile = getattr(player, "input_profile", None) or self._build_player_control_profiles()[0]
+                profile = (
+                    getattr(player, "input_profile", None) or self.control_profiles[0]
+                )
                 use_network_input = (
                     self.network_mode == "host"
                     and self.network_host is not None
@@ -747,7 +812,9 @@ class Game:
                 )
 
                 if use_network_input:
-                    remote_input = self.network_host.get_player_input(player.player_index)
+                    remote_input = self.network_host.get_player_input(
+                        player.player_index
+                    )
                     virtual_keys = self._virtual_keys_from_input(profile, remote_input)
                     player.move(virtual_keys, profile.get("move"))
                     if remote_input.get("dash"):
@@ -761,8 +828,12 @@ class Game:
                     if self._is_any_key_pressed(keys, profile.get("dash", ())):
                         player.dash()
 
-                    keyboard_shoot = self._is_any_key_pressed(keys, profile.get("shoot_keyboard", ()))
-                    mouse_shoot = profile.get("shoot_mouse", False) and bool(mouse_pressed[0])
+                    keyboard_shoot = self._is_any_key_pressed(
+                        keys, profile.get("shoot_keyboard", ())
+                    )
+                    mouse_shoot = profile.get("shoot_mouse", False) and bool(
+                        mouse_pressed[0]
+                    )
                     if keyboard_shoot or mouse_shoot:
                         if profile.get("shoot_mouse", False):
                             player.shoot(mx, my)
@@ -772,7 +843,7 @@ class Game:
 
             for player in self.players:
                 player.update()
-            
+
             # Update all bosses
             primary_player = self.player
             for boss in self.current_bosses:
@@ -781,13 +852,16 @@ class Game:
             self.player = primary_player
 
             # Record performance stats
-            sample_player = self.get_alive_players()[0] if self.get_alive_players() else self.player
+            sample_player = (
+                self.get_alive_players()[0] if self.get_alive_players() else self.player
+            )
             self.performance_logger.tick_frame(sample_player, self.current_bosses)
             self._apply_anti_camp_pressure()
-            
+
             self.handle_collisions()
             self.damage_numbers.update(self.current_bosses)
-            
+            self._record_replay_frame()
+
             if not self.get_alive_players():
                 self.state = GameState.GAME_OVER
                 self.audio_manager.stop_music()
@@ -800,17 +874,19 @@ class Game:
                 for dead_boss in dead_bosses:
                     self.performance_logger.end_boss_fight(dead_boss.name, victory=True)
                     self.boss_manager.on_boss_defeated(dead_boss)
-                
+
                 # Remove dead bosses from current_bosses
-                self.current_bosses = [boss for boss in self.current_bosses if boss.health > 0]
-                
+                self.current_bosses = [
+                    boss for boss in self.current_bosses if boss.health > 0
+                ]
+
                 # If any bosses died, add score immediately
                 if dead_bosses:
                     self.score += 500 * len(dead_bosses)
 
             # Check if all bosses are defeated
             all_bosses_defeated = len(self.current_bosses) == 0
-            
+
             if all_bosses_defeated:
                 # End current boss fight with victory - all bosses have been removed
                 fight_time = (pygame.time.get_ticks() / 1000) - self.fight_start_time
@@ -836,135 +912,16 @@ class Game:
             self.screen_shake.update()
 
     def draw(self):
-        # Simple drawing approach to fix black screen
-        
-        if self.state == GameState.MENU:
-            # Clear screen and draw menu
-            self.screen.fill(BLACK)
-            self.ui_manager.draw_menu(self.screen)
-        elif self.state == GameState.CUSTOMIZATION:
-            self.screen.fill(BLACK)
-            self.ui_manager.draw_customization(
-                self.screen,
-                self.players,
-                self.customization_player_index,
-                self.customization_field_index,
-                self.color_options,
-                self.hat_options,
-            )
-        elif self.state == GameState.BOSS_INTRO:
-            # Draw arena background first
-            self._draw_arena_background(self.screen)
-            # Show boss intro for all current bosses
-            if self.current_bosses:
-                boss_names = " & ".join([boss.name for boss in self.current_bosses])
-                self.ui_manager.draw_boss_intro(self.screen, boss_names, self._get_boss_hint_text())
-        elif self.state == GameState.FIGHTING:
-            # Keep render culling aligned with current window/fullscreen size.
-            self.render_system.width = self.screen.get_width()
-            self.render_system.height = self.screen.get_height()
-            self.render_system.clear_batches()
-            self._populate_render_batches()
-            self.render_system.render(self.screen, background_draw=self._draw_arena_background)
+        return draw_game(self)
 
-            self._draw_offscreen_indicators()
-            self.damage_numbers.draw(self.screen)
-            self.ui_manager.draw_player_status(self.screen, self.players)
-                
-            # Draw health bars for multiple bosses
-            if len(self.current_bosses) > 1:
-                self.ui_manager.draw_multiple_health_bars(self.screen, self.current_bosses)
-        elif self.state == GameState.UPGRADE:
-            self.screen.fill(BLACK)
-            self.ui_manager.draw_upgrade_screen(self.screen, self.pending_upgrades, self.hovered_upgrade_index)
-        elif self.state == GameState.VICTORY:
-            self.screen.fill(BLACK)
-            self.ui_manager.draw_victory(self.screen, self.score, self.total_time)
-            if not self.victory_analysis_printed:
-                self.performance_logger.print_analysis()
-                self.performance_logger.save_session()
-                self.victory_analysis_printed = True
-        elif self.state == GameState.GAME_OVER:
-            self.screen.fill(BLACK)
-            self.ui_manager.draw_game_over(self.screen)
-            if not self.game_over_analysis_printed:
-                self.performance_logger.print_analysis()
-                self.performance_logger.save_session()
-                self.game_over_analysis_printed = True
-
-        # Apply screen shake at the end
-        if self.screen_shake.duration > 0:
-            self.screen_shake.apply_offset(self.screen)
-        
-        # Update display
-        pygame.display.flip()
-
-    def _draw_offscreen_indicators(self):
-        if not self.current_bosses:
-            return
-        screen_w = self.screen.get_width()
-        screen_h = self.screen.get_height()
-        center_x = screen_w // 2
-        center_y = screen_h // 2
-        max_indicators = 20
-        count = 0
-
-        for boss in self.current_bosses:
-            for projectile in boss.get_all_projectiles():
-                if count >= max_indicators:
-                    return
-                pos = self._get_projectile_position(projectile)
-                if pos is None:
-                    continue
-                px, py = pos
-                if -10 <= px <= screen_w + 10 and -10 <= py <= screen_h + 10:
-                    continue
-
-                angle = math.atan2(py - center_y, px - center_x)
-                edge_x = min(max(int(center_x + math.cos(angle) * (screen_w // 2 - 12)), 8), screen_w - 8)
-                edge_y = min(max(int(center_y + math.sin(angle) * (screen_h // 2 - 12)), 8), screen_h - 8)
-
-                tip = (edge_x + int(math.cos(angle) * 8), edge_y + int(math.sin(angle) * 8))
-                left = (edge_x + int(math.cos(angle + 2.5) * 6), edge_y + int(math.sin(angle + 2.5) * 6))
-                right = (edge_x + int(math.cos(angle - 2.5) * 6), edge_y + int(math.sin(angle - 2.5) * 6))
-
-                pygame.draw.polygon(self.screen, YELLOW, [tip, left, right])
-                count += 1
-
-    def _get_projectile_position(self, projectile):
-        """Safely extract projectile position from object or dict-like sources."""
-        if isinstance(projectile, dict):
-            if "x" in projectile and "y" in projectile:
-                return projectile["x"], projectile["y"]
-            return None
-        if hasattr(projectile, "x") and hasattr(projectile, "y"):
-            return projectile.x, projectile.y
-        if hasattr(projectile, "get_rect"):
-            rect = projectile.get_rect()
-            return rect.centerx, rect.centery
-        return None
-    
-    def _populate_render_batches(self):
-        """Populate render batches with all visible objects"""
-        # Player and bosses own drawing of their nested objects (projectiles/effects).
-        # Batching only top-level entities avoids double-rendering.
-        for player in self.players:
-            player_layer = getattr(player, "render_layer", RenderLayer.ENTITIES)
-            self.render_system.add_object(player, player_layer)
-        
-        # Add bosses
-        for boss in self.current_bosses:
-            boss_layer = getattr(boss, "render_layer", RenderLayer.ENTITIES)
-            self.render_system.add_object(boss, boss_layer)
-            
     def run(self):
         while self.running:
             mouse_pos = pygame.mouse.get_pos()
-            
+
             # Check for auto-balance updates periodically
             if self.auto_balance.should_run_balance_check():
                 self.auto_balance.update_balance_adjustments()
-            
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
@@ -980,6 +937,15 @@ class Game:
                         self.state = GameState.CUSTOMIZATION
                     elif event.key == pygame.K_SPACE:
                         if self.state == GameState.MENU:
+                            if (
+                                self.network_mode == "host"
+                                and self.network_host
+                                and not self.network_host.all_connected_ready()
+                            ):
+                                self.error_handler.logger.info(
+                                    "Waiting for all connected clients to be ready."
+                                )
+                                continue
                             self.start_boss_fight()
                         elif self.state == GameState.VICTORY:
                             self.reset_game()
@@ -1000,98 +966,30 @@ class Game:
                     if event.button == 1 and self.state == GameState.UPGRADE:
                         if 0 <= self.hovered_upgrade_index < len(self.pending_upgrades):
                             self.apply_upgrade(self.hovered_upgrade_index)
-            
+
             if self.state == GameState.UPGRADE:
                 self.hovered_upgrade_index = self.get_hovered_upgrade_index(mouse_pos)
-                            
+
             try:
                 self.update()
                 self.draw()
                 if self.network_mode == "host" and self.network_host:
-                    self.network_host.send_frame(self.screen, pygame)
+                    self.network_host.send_frame(
+                        self.screen,
+                        pygame,
+                        world_state=self._build_network_world_state(),
+                    )
             except Exception:
                 self.error_handler.logger.exception("Unhandled error in main game loop")
                 self.running = False
             self.clock.tick(FPS)
-            
+
         pygame.quit()
         self.audio_manager.cleanup()
         if self.network_host:
             self.network_host.stop()
+        self._flush_replay_log()
 
-
-def run_network_client():
-    init_pygame()
-    host = os.getenv("BOSS_RUSH_HOST", "127.0.0.1").strip()
-    port = int(os.getenv("BOSS_RUSH_PORT", "50000"))
-    try:
-        player_slot = int(os.getenv("BOSS_RUSH_PLAYER_SLOT", "2"))
-    except ValueError:
-        player_slot = 2
-    player_slot = max(2, min(4, player_slot))
-    player_index = player_slot - 1
-
-    client = NetworkClient(host, port, player_index=player_index)
-    try:
-        client.connect()
-    except OSError:
-        print(f"Unable to connect to host {host}:{port} for player slot {player_slot}.")
-        print("Check host IP, firewall, and that host mode is running.")
-        return
-
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption(f"Boss Rush Game (LAN Client P{player_slot})")
-    clock = pygame.time.Clock()
-    running = True
-    latest_surface = None
-    controls = {
-        "left": pygame.K_LEFT,
-        "right": pygame.K_RIGHT,
-        "up": pygame.K_UP,
-        "down": pygame.K_DOWN,
-        "dash": pygame.K_RCTRL,
-        "shoot": pygame.K_RSHIFT,
-    }
-
-    while running and client.running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-        keys = pygame.key.get_pressed()
-        input_state = {
-            "left": bool(keys[controls["left"]]),
-            "right": bool(keys[controls["right"]]),
-            "up": bool(keys[controls["up"]]),
-            "down": bool(keys[controls["down"]]),
-            "dash": bool(keys[controls["dash"]]),
-            "shoot": bool(keys[controls["shoot"]]),
-        }
-        client.send_input(input_state=input_state)
-
-        frame = client.get_latest_frame()
-        if frame:
-            w = int(frame.get("w", WIDTH))
-            h = int(frame.get("h", HEIGHT))
-            packed = frame.get("data", b"")
-            try:
-                raw = zlib.decompress(packed)
-                latest_surface = pygame.image.fromstring(raw, (w, h), "RGB")
-                if screen.get_width() != w or screen.get_height() != h:
-                    screen = pygame.display.set_mode((w, h))
-            except (zlib.error, ValueError):
-                latest_surface = None
-
-        if latest_surface:
-            screen.blit(latest_surface, (0, 0))
-        else:
-            screen.fill((0, 0, 0))
-
-        pygame.display.flip()
-        clock.tick(FPS)
-
-    client.close()
-    pygame.quit()
 
 if __name__ == "__main__":
     mode = os.getenv("BOSS_RUSH_NETWORK_MODE", "off").strip().lower()

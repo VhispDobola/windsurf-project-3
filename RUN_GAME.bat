@@ -28,8 +28,17 @@ pause
 exit
 
 :found_python
-echo  Installing pygame if needed...
-%PYTHON_CMD% -m pip install pygame --user >nul 2>&1
+echo  Checking pygame...
+%PYTHON_CMD% -c "import pygame" >nul 2>&1
+if errorlevel 1 (
+    echo  Installing pygame...
+    %PYTHON_CMD% -m pip install pygame --user >nul 2>&1
+    if errorlevel 1 (
+        echo  Failed to install pygame.
+        pause
+        exit /b 1
+    )
+)
 
 echo.
 echo  Starting game...
