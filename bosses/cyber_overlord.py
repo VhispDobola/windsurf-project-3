@@ -5,8 +5,15 @@ from .immortal_phoenix import MultiStageBoss, BossStage
 from core.projectile import Projectile
 from core.effect import Telegraph
 from config.constants import WIDTH, HEIGHT, RED, BLUE, GREEN, YELLOW, PURPLE, ORANGE, CYAN, WHITE
+from utils import load_boss_profile
 
 class CyberOverlord(MultiStageBoss):
+    DEFAULT_STAGE_PROFILE = {
+        0: {"drone_cd": 130},
+        1: {"laser_cd": 112, "predictive_strike_delay": 34},
+        2: {"glitch_cd": 205, "glitch_count": 24},
+    }
+
     def __init__(self):
         stages = [
             BossStage("Basic AI", 700, (150, 150, 150), 
@@ -29,6 +36,7 @@ class CyberOverlord(MultiStageBoss):
         self.matrix_glitch_cooldown = 0
         self.overloaded_timer = 0
         self.prediction_strikes = []
+        self.stage_profile = load_boss_profile("Cyber Overlord", "stage_profile", self.DEFAULT_STAGE_PROFILE)
         
     def run_attacks(self):
         super().run_attacks()
@@ -55,15 +63,15 @@ class CyberOverlord(MultiStageBoss):
         if self.current_stage_index == 0:  # Basic AI
             if self.drone_cooldown <= 0:
                 self.drone_swarm_attack()
-                self.drone_cooldown = 120  # Cooldown to prevent spam
+                self.drone_cooldown = self.stage_profile[0]["drone_cd"]
         elif self.current_stage_index == 1:  # Adaptive AI
             if self.adaptive_laser_cooldown <= 0:
                 self.adaptive_laser_attack()
-                self.adaptive_laser_cooldown = 100
+                self.adaptive_laser_cooldown = self.stage_profile[1]["laser_cd"]
         elif self.current_stage_index == 2:  # Sentient AI
             if self.matrix_glitch_cooldown <= 0:
                 self.matrix_glitch_attack()
-                self.matrix_glitch_cooldown = 180
+                self.matrix_glitch_cooldown = self.stage_profile[2]["glitch_cd"]
                 
         # Call update methods
         self.update_drones()
@@ -102,13 +110,13 @@ class CyberOverlord(MultiStageBoss):
                     self.prediction_strikes.append({
                         'x': pred_x,
                         'y': pred_y,
-                        'timer': 30
+                        'timer': self.stage_profile[1]["predictive_strike_delay"]
                     })
                     
     def matrix_glitch_attack(self):
         self.matrix_glitch = True
         # Glitch reality with multiple attack patterns
-        for _ in range(30):
+        for _ in range(self.stage_profile[2]["glitch_count"]):
             glitch_x = random.randint(0, WIDTH)
             glitch_y = random.randint(0, HEIGHT)
             glitch_type = random.choice(['laser', 'drone', 'data_corruption'])
@@ -251,10 +259,12 @@ class CyberOverlord(MultiStageBoss):
     def draw(self, screen):
         # Draw matrix glitch effect
         if self.matrix_glitch:
+            screen_w = screen.get_width()
+            screen_h = screen.get_height()
             for i in range(10):
                 if random.random() < 0.3:
-                    glitch_x = random.randint(0, WIDTH)
-                    glitch_y = random.randint(0, HEIGHT)
+                    glitch_x = random.randint(0, screen_w)
+                    glitch_y = random.randint(0, screen_h)
                     glitch_surface = pygame.Surface((50, 50))
                     glitch_surface.set_alpha(128)
                     pygame.draw.rect(glitch_surface, (255, 0, 255), (0, 0, 50, 50))
@@ -296,8 +306,9 @@ class CyberOverlord(MultiStageBoss):
         self.draw_health_bar(screen)
         
         # Stage name
-        stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
-        font = pygame.font.Font(None, 24)
-        text = font.render(stage_text, True, WHITE)
-        text_rect = text.get_rect(center=(WIDTH // 2, 15))
-        screen.blit(text, text_rect)
+        if self.should_draw_single_health_bar():
+            stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
+            font = pygame.font.Font(None, 24)
+            text = font.render(stage_text, True, WHITE)
+            text_rect = text.get_rect(center=(screen.get_width() // 2, 15))
+            screen.blit(text, text_rect)

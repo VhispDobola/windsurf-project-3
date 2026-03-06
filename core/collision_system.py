@@ -15,48 +15,68 @@ class CollisionSystem:
         self.performance_logger = performance_logger
         self.spatial_grid = SpatialGrid(width, height, cell_size=64)
         self.hazard_cooldowns = {}
+
+    def update_bounds(self, width, height):
+        """Resize collision grid when screen size changes."""
+        width = max(1, int(width))
+        height = max(1, int(height))
+        if width == self.spatial_grid.width and height == self.spatial_grid.height:
+            return
+        self.spatial_grid = SpatialGrid(width, height, cell_size=self.spatial_grid.cell_size)
     
     def handle_collisions(self, player, bosses):
-        """Handle all collisions between player and bosses"""
-        if not bosses:
+        """Handle all collisions between one or more players and bosses."""
+        if not bosses or not player:
             return
-            
+
+        players = player if isinstance(player, (list, tuple)) else [player]
+        players = [p for p in players if p is not None]
+        if not players:
+            return
+
         # Update spatial grid
         self.spatial_grid.clear()
-        self._populate_grid(player, bosses)
-        # Keep as list: hazard/projectile containers may include dicts (unhashable).
-        nearby_objects = self.spatial_grid.get_nearby_objects(player)
-        
-        damage_sources = self._collect_damage_sources(bosses, nearby_objects)
-        player_rect = player.get_rect()
         total_damage = 0
-        
-        # Handle special boss collisions (like Blade Master charge)
-        total_damage += self._handle_special_collisions(player, bosses)
-        
-        # Handle projectile and effect collisions with spatial optimization
-        for damage_source in damage_sources:
-            if damage_source.active:
-                damage = damage_source.check_collision(player_rect)
-                if damage > 0:
-                    damage = int(damage * getattr(damage_source, 'damage_scale', 1.0))
-                    # Consume one-hit sources on first contact, even if player is
-                    # currently invincible, to prevent sticky overlap damage.
-                    damage_source.deactivate()
-                    if player.take_damage(damage):
-                        total_damage += damage
-                        self._log_damage(bosses[0], damage)
-                        self._log_ability_hit(damage_source, damage)
-        
+        self._populate_grid(players, bosses)
+
+        for active_player in players:
+            if getattr(active_player, "health", 0) <= 0:
+                continue
+
+            nearby_objects = self.spatial_grid.get_nearby_objects(active_player)
+            nearby_object_ids = {id(obj) for obj in nearby_objects}
+            damage_sources = self._collect_damage_sources(bosses, nearby_object_ids)
+            player_rect = active_player.get_rect()
+
+            # Handle special boss collisions (like Blade Master charge)
+            total_damage += self._handle_special_collisions(active_player, bosses)
+
+            # Handle projectile and effect collisions with spatial optimization
+            for damage_source in damage_sources:
+                if damage_source.active:
+                    damage = damage_source.check_collision(player_rect, target_id=id(active_player))
+                    if damage > 0:
+                        damage = int(damage * getattr(damage_source, 'damage_scale', 1.0))
+                        # Projectiles are one-hit globally. Persistent area effects can hit
+                        # multiple players independently.
+                        if hasattr(damage_source, 'projectile'):
+                            damage_source.deactivate()
+                        if active_player.take_damage(damage):
+                            total_damage += damage
+                            self._log_damage(damage_source, bosses, damage)
+                            self._log_ability_hit(damage_source, damage)
+
         # Handle player projectiles hitting bosses with spatial optimization
-        self._handle_player_projectiles(player, bosses)
-        
+        for active_player in players:
+            self._handle_player_projectiles(active_player, bosses)
+
         return total_damage
     
-    def _populate_grid(self, player, bosses):
+    def _populate_grid(self, players, bosses):
         """Populate spatial grid with all objects"""
-        # Add player
-        self.spatial_grid.add_object(player)
+        # Add players
+        for player in players:
+            self.spatial_grid.add_object(player)
         
         # Add bosses
         for boss in bosses:
@@ -69,10 +89,11 @@ class CollisionSystem:
                     self.spatial_grid.add_object(projectile)
         
         # Add player projectiles
-        for projectile in player.projectiles:
-            self.spatial_grid.add_object(projectile)
+        for player in players:
+            for projectile in player.projectiles:
+                self.spatial_grid.add_object(projectile)
     
-    def _collect_damage_sources(self, bosses, nearby_objects=None):
+    def _collect_damage_sources(self, bosses, nearby_object_ids=None):
         """Collect all damage sources from bosses"""
         damage_sources = []
         
@@ -82,7 +103,7 @@ class CollisionSystem:
             for projectile in boss.get_all_projectiles():
                 if not self._is_projectile_like(projectile):
                     continue
-                if nearby_objects is not None and projectile not in nearby_objects:
+                if nearby_object_ids is not None and id(projectile) not in nearby_object_ids:
                     continue
                 if not hasattr(projectile, 'parent_list'):
                     if hasattr(boss, 'get_projectile_parent_list'):
@@ -216,8 +237,9 @@ class CollisionSystem:
                         # Player is dashing - trigger counter-attack
                         if hasattr(boss, 'trigger_dodge_counter'):
                             boss.trigger_dodge_counter()
-                            if player.game:
-                                player.game.score += 100
+                            game = getattr(player, "_game_ref", None) or getattr(player, "game", None)
+                            if game:
+                                game.score += 100
                     else:
                         # Player takes damage from charge
                         damage = int(15 * getattr(boss, 'damage_scale', 1.0))
@@ -248,29 +270,45 @@ class CollisionSystem:
         remaining_projectiles = []
         for projectile in player.projectiles:
             nearby_objects = self.spatial_grid.get_nearby_objects(projectile)
+            projectile_rect = projectile.get_rect()
 
             projectile_consumed = False
             for obj in nearby_objects:
                 if obj in bosses:
-                    projectile_rect = projectile.get_rect()
                     boss_rect = obj.get_rect()
-                    
+
                     if projectile_rect.colliderect(boss_rect):
+                        previous_health = float(getattr(obj, 'health', 0))
                         obj.take_damage(projectile.damage)
-                        if hasattr(player, '_game_ref') and player._game_ref:
-                            player._game_ref.score += 10
-                        if self.performance_logger:
-                            self.performance_logger.log_damage(obj.name, projectile.damage, damage_to_player=False)
-                            self.performance_logger.log_attack(obj.name, is_player_attack=True)
+                        current_health_raw = float(getattr(obj, 'health', previous_health))
+                        current_health = max(0.0, current_health_raw)
+                        actual_damage = max(0.0, min(previous_health, previous_health - current_health))
+                        actual_damage = int(round(actual_damage))
+
+                        if actual_damage > 0:
+                            if hasattr(player, '_game_ref') and player._game_ref:
+                                player._game_ref.score += 10
+                                if hasattr(player._game_ref, 'damage_numbers'):
+                                    player._game_ref.damage_numbers.register_damage(obj, actual_damage)
+                            if self.performance_logger:
+                                self.performance_logger.log_damage(obj.name, actual_damage, damage_to_player=False)
+                                self.performance_logger.log_attack(obj.name, is_player_attack=True)
+
                         projectile_consumed = True
                         break
             if not projectile_consumed:
                 remaining_projectiles.append(projectile)
         player.projectiles = remaining_projectiles
     
-    def _log_damage(self, boss, damage):
+    def _log_damage(self, damage_source, bosses, damage):
         """Log damage dealt to player"""
         if self.performance_logger:
+            boss = None
+            source_boss_name = getattr(damage_source, "boss_name", None)
+            if source_boss_name:
+                boss = next((b for b in bosses if getattr(b, "name", None) == source_boss_name), None)
+            if boss is None:
+                boss = bosses[0]
             self.performance_logger.log_damage(boss.name, damage, damage_to_player=True)
             self.performance_logger.log_attack(boss.name, is_player_attack=False)
     

@@ -5,9 +5,42 @@ from core.boss import Boss
 from core.projectile import Projectile
 from core.effect import Telegraph
 from config.constants import WIDTH, HEIGHT, PURPLE, CYAN, ORANGE, RED, GREEN
-from utils import load_image
+from utils import load_image, load_boss_profile
 
 class NexusCore(Boss):
+    DEFAULT_PHASE_PROFILE = {
+        1: {
+            "spiral_cd": 60,
+            "aimed_cd": 120,
+            "burst_count": 4,
+            "burst_spread": 0.34,
+            "burst_speed": 5.6,
+            "burst_damage": 8,
+        },
+        2: {
+            "spiral_cd": 50,
+            "aimed_cd": 98,
+            "pulse_cd": 138,
+            "burst_count": 6,
+            "burst_spread": 0.48,
+            "burst_speed": 6.0,
+            "burst_damage": 9,
+            "pulse_damage": 10,
+            "pulse_speed": 5.2,
+        },
+        3: {
+            "spiral_cd": 34,
+            "aimed_cd": 78,
+            "pulse_cd": 112,
+            "burst_count": 8,
+            "burst_spread": 0.62,
+            "burst_speed": 6.5,
+            "burst_damage": 10,
+            "pulse_damage": 11,
+            "pulse_speed": 5.9,
+        },
+    }
+
     def __init__(self):
         super().__init__(WIDTH // 2 - 50, 100, 100, 100, 600, "Nexus Core")
         self.color = RED
@@ -21,6 +54,7 @@ class NexusCore(Boss):
         self.hazard_timer = 0
         self.arena_hazards = []
         self.hitbox_scale = 0.82
+        self.phase_profile = load_boss_profile("Nexus Core", "phase_profile", self.DEFAULT_PHASE_PROFILE)
         
         # Hazard damage cooldown to prevent damage spam
         self.hazard_damage_cooldown = {}
@@ -38,6 +72,7 @@ class NexusCore(Boss):
             self.logger.warning("Nexus Core sprite not found - %s", e)
         
     def run_attacks(self):
+        profile = self.phase_profile.get(self.phase, self.phase_profile[3])
         self.spiral_cooldown -= 1
         self.aimed_cooldown -= 1
         self.pulse_cooldown -= 1
@@ -46,36 +81,51 @@ class NexusCore(Boss):
         if self.phase == 1:
             if self.spiral_cooldown <= 0:
                 self.spiral_pattern()
-                self.spiral_cooldown = 55
+                self.spiral_cooldown = profile["spiral_cd"]
             if self.aimed_cooldown <= 0:
-                self.targeted_burst(count=4, spread=0.35, speed=5.8, damage=8)
-                self.aimed_cooldown = 110
+                self.targeted_burst(
+                    count=profile["burst_count"],
+                    spread=profile["burst_spread"],
+                    speed=profile["burst_speed"],
+                    damage=profile["burst_damage"],
+                )
+                self.aimed_cooldown = profile["aimed_cd"]
                 
         elif self.phase == 2:
             if self.spiral_cooldown <= 0:
                 self.double_spiral()
-                self.spiral_cooldown = 45
+                self.spiral_cooldown = profile["spiral_cd"]
             if self.aimed_cooldown <= 0:
-                self.targeted_burst(count=6, spread=0.5, speed=6.2, damage=10)
-                self.aimed_cooldown = 90
+                self.targeted_burst(
+                    count=profile["burst_count"],
+                    spread=profile["burst_spread"],
+                    speed=profile["burst_speed"],
+                    damage=profile["burst_damage"],
+                )
+                self.aimed_cooldown = profile["aimed_cd"]
             if not self.shield_active:
                 self.activate_shields()
             if self.pulse_cooldown <= 0:
-                self.shield_pulse(damage=10, speed=5.5)
-                self.pulse_cooldown = 130
+                self.shield_pulse(damage=profile["pulse_damage"], speed=profile["pulse_speed"])
+                self.pulse_cooldown = profile["pulse_cd"]
                 
         else:  # phase 3
             if self.spiral_cooldown <= 0:
                 self.triple_spiral()
-                self.spiral_cooldown = 30
+                self.spiral_cooldown = profile["spiral_cd"]
             if self.aimed_cooldown <= 0:
-                self.targeted_burst(count=8, spread=0.65, speed=6.8, damage=11)
-                self.aimed_cooldown = 70
+                self.targeted_burst(
+                    count=profile["burst_count"],
+                    spread=profile["burst_spread"],
+                    speed=profile["burst_speed"],
+                    damage=profile["burst_damage"],
+                )
+                self.aimed_cooldown = profile["aimed_cd"]
             if not self.shield_active:
                 self.activate_shields()
             if self.pulse_cooldown <= 0:
-                self.shield_pulse(damage=12, speed=6.2)
-                self.pulse_cooldown = 100
+                self.shield_pulse(damage=profile["pulse_damage"], speed=profile["pulse_speed"])
+                self.pulse_cooldown = profile["pulse_cd"]
             if self.hazard_timer <= 0:
                 self.hazard_mode = True
                 self.hazard_timer = 300

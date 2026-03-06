@@ -13,6 +13,7 @@ class AutoBalanceSystem:
         self.performance_history = []
         self.balance_adjustments = {}
         self.min_fights_for_balance = 3
+        self._last_balance_check = 0.0
         self.load_balance_data()
         
     def load_balance_data(self):
@@ -105,7 +106,7 @@ class AutoBalanceSystem:
         # Duration balancing
         if avg_duration < 15:  # Too short
             recommendations['health_multiplier'] *= 1.2
-        elif avg_duration > 90:  # Too long
+        elif avg_duration > 80:  # Too long
             recommendations['health_multiplier'] *= 0.9
             recommendations['damage_multiplier'] *= 1.1
             
@@ -200,9 +201,9 @@ class AutoBalanceSystem:
             
     def should_run_balance_check(self) -> bool:
         """Check if enough time has passed to run balance check"""
-        if not hasattr(self, '_last_balance_check'):
-            self._last_balance_check = 0
-            
         current_time = datetime.now().timestamp()
         # Run balance check every 5 minutes or at startup
-        return current_time - self._last_balance_check > 300 or self._last_balance_check == 0
+        if self._last_balance_check == 0 or current_time - self._last_balance_check > 300:
+            self._last_balance_check = current_time
+            return True
+        return False

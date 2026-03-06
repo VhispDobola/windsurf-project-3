@@ -50,6 +50,7 @@ class UpgradeSystem:
                 "name": upgrade["name"],
                 "desc": upgrade.get("desc", ""),
                 "apply": (lambda p=player, fn=upgrade["apply"]: fn(p)),
+                "apply_to": upgrade["apply"],
             })
         return upgrades
 

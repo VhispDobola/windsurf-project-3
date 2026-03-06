@@ -36,11 +36,12 @@ class UIManager:
 
         self._draw_center_text(screen, "BOSS RUSH", self.font_large, screen_height // 3, WHITE)
         self._draw_center_text(screen, "Press SPACE to Start", self.font_medium, screen_height // 2, YELLOW)
+        self._draw_center_text(screen, "Press C to Customize", self.font_small, screen_height // 2 + 36, GREEN)
         
         controls = [
-            "WASD/Arrows: Move",
-            "SHIFT: Dash",
-            "SPACE: Shoot"
+            "P1: WASD + LSHIFT + SPACE/Mouse",
+            "P2/P3/P4: LAN client slots 2/3/4",
+            "F11: Toggle Fullscreen"
         ]
         
         y = int(screen_height * 0.586)
@@ -49,6 +50,84 @@ class UIManager:
             text_rect = text.get_rect(center=(screen_width // 2, y))
             screen.blit(text, text_rect)
             y += 30
+
+    def draw_customization(self, screen, players, selected_player, selected_field, color_options, hat_options):
+        screen_w = screen.get_width()
+        screen_h = screen.get_height()
+
+        self._draw_center_text(screen, "CUSTOMIZATION", self.font_large, 70, YELLOW)
+        self._draw_center_text(screen, "TAB: Switch Player  |  Arrows: Edit  |  Enter/Esc: Back", self.font_tiny, 104, WHITE)
+
+        if not players:
+            return
+
+        selected_player = max(0, min(selected_player, len(players) - 1))
+        player = players[selected_player]
+        username = getattr(player, "username", "") or f"P{selected_player + 1}"
+        hat = getattr(player, "hat_style", "None")
+        color = getattr(player, "color", WHITE)
+
+        panel = pygame.Rect(screen_w // 2 - 250, 140, 500, 360)
+        self._draw_panel(screen, panel, (22, 22, 28), (130, 130, 180))
+
+        self._draw_center_text(screen, f"Editing Player {selected_player + 1}", self.font_medium, 180, color)
+
+        field_colors = [WHITE, WHITE, WHITE]
+        if 0 <= selected_field < len(field_colors):
+            field_colors[selected_field] = YELLOW
+
+        user_text = self.font_small.render(f"Username: {username}", True, field_colors[0])
+        color_text = self.font_small.render(f"Color: {color}", True, field_colors[1])
+        hat_text = self.font_small.render(f"Hat: {hat}", True, field_colors[2])
+        screen.blit(user_text, (panel.x + 40, panel.y + 90))
+        screen.blit(color_text, (panel.x + 40, panel.y + 140))
+        screen.blit(hat_text, (panel.x + 40, panel.y + 190))
+
+        for i, option in enumerate(color_options):
+            swatch = pygame.Rect(panel.x + 40 + (i * 34), panel.y + 235, 26, 26)
+            pygame.draw.rect(screen, option, swatch, border_radius=4)
+            if option == color:
+                pygame.draw.rect(screen, WHITE, swatch.inflate(4, 4), 2, border_radius=5)
+
+        preview_rect = pygame.Rect(panel.centerx + 120, panel.y + 120, 38, 38)
+        pygame.draw.rect(screen, (0, 0, 0), preview_rect.inflate(8, 8), border_radius=8)
+        pygame.draw.rect(screen, color, preview_rect, border_radius=6)
+        name_preview = self.font_tiny.render(username, True, WHITE)
+        screen.blit(name_preview, name_preview.get_rect(center=(preview_rect.centerx, preview_rect.y - 14)))
+
+        help_lines = [
+            "While Username selected: type letters/numbers, Backspace to delete",
+            "While Color/Hat selected: Left/Right to cycle options",
+            f"Hat options: {', '.join(hat_options)}",
+        ]
+        for idx, line in enumerate(help_lines):
+            self._draw_center_text(screen, line, self.font_tiny, panel.y + 290 + idx * 22, WHITE)
+
+    def draw_player_status(self, screen, players):
+        if not players:
+            return
+
+        panel_x = 12
+        panel_y = 12
+        panel_w = 230
+        panel_h = 30 + (len(players) * 28)
+        panel = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
+        pygame.draw.rect(screen, (255, 255, 255), panel, 2, border_radius=10)
+
+        title = self.font_tiny.render("Players", True, YELLOW)
+        screen.blit(title, (panel_x + 10, panel_y + 7))
+
+        for i, player in enumerate(players):
+            alive = player.health > 0
+            color = getattr(player, "color", WHITE)
+            label_color = color if alive else (130, 130, 130)
+            hp = max(0, int(player.health))
+            max_hp = max(1, int(player.max_health))
+            status = "DOWN" if not alive else f"{hp}/{max_hp}"
+            username = getattr(player, "username", f"P{i + 1}") or f"P{i + 1}"
+            text = self.font_tiny.render(f"{username}: {status}", True, label_color)
+            screen.blit(text, (panel_x + 10, panel_y + 30 + (i * 26)))
             
     def draw_boss_intro(self, screen, boss_name, hint_text=None):
         # Start animated boss intro

@@ -1,0 +1,103 @@
+{
+  "Ice Tyrant": {
+    "phase_profile": {
+      "1": {
+        "blizzard_cd": 180,
+        "spire_cd": 220,
+        "wall_cd": 240,
+        "shatter_cd": 260,
+        "damage_scale": 0.9,
+        "aura_damage": 6
+      },
+      "2": {
+        "blizzard_cd": 150,
+        "spire_cd": 190,
+        "wall_cd": 200,
+        "shatter_cd": 250,
+        "damage_scale": 0.93,
+        "aura_damage": 7
+      },
+      "3": {
+        "blizzard_cd": 120,
+        "spire_cd": 160,
+        "wall_cd": 165,
+        "shatter_cd": 210,
+        "damage_scale": 0.96,
+        "aura_damage": 8
+      }
+    }
+  },
+  "Magma Sovereign": {
+    "phase_profile": {
+      "1": {
+        "magma_bomb_cd": 115,
+        "geyser_cd": 155,
+        "molten_rain_cd": 190,
+        "heat_wave_cd": 235,
+        "damage_scale": 0.9
+      },
+      "2": {
+        "tracking_cd": 82,
+        "wall_cd": 130,
+        "chain_cd": 102,
+        "damage_scale": 0.94
+      },
+      "3": {
+        "vortex_cd": 170,
+        "cascade_cd": 195,
+        "tsunami_cd": 215,
+        "inferno_cd": 320,
+        "damage_scale": 0.97
+      }
+    }
+  },
+  "Nexus Core": {
+    "phase_profile": {
+      "1": {
+        "spiral_cd": 60,
+        "aimed_cd": 120,
+        "burst_count": 4,
+        "burst_spread": 0.34,
+        "burst_speed": 5.6,
+        "burst_damage": 8
+      },
+      "2": {
+        "spiral_cd": 50,
+        "aimed_cd": 98,
+        "pulse_cd": 138,
+        "burst_count": 6,
+        "burst_spread": 0.48,
+        "burst_speed": 6.0,
+        "burst_damage": 9,
+        "pulse_damage": 10,
+        "pulse_speed": 5.2
+      },
+      "3": {
+        "spiral_cd": 34,
+        "aimed_cd": 78,
+        "pulse_cd": 112,
+        "burst_count": 8,
+        "burst_spread": 0.62,
+        "burst_speed": 6.5,
+        "burst_damage": 10,
+        "pulse_damage": 11,
+        "pulse_speed": 5.9
+      }
+    }
+  },
+  "Cyber Overlord": {
+    "stage_profile": {
+      "0": {
+        "drone_cd": 130
+      },
+      "1": {
+        "laser_cd": 112,
+        "predictive_strike_delay": 34
+      },
+      "2": {
+        "glitch_cd": 205,
+        "glitch_count": 24
+      }
+    }
+  }
+}

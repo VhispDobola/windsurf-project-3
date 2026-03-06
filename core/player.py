@@ -33,6 +33,10 @@ class Player(Entity):
         self.time_stopped = False
         self.render_layer = RenderLayer.ENTITIES
         self.glow = True
+        self.last_move_dir = (0, -1)
+        self.dash_dir = (0, -1)
+        self.username = ""
+        self.hat_style = "None"
         
         # Status effect system
         self.base_speed = PLAYER_BASE_SPEED
@@ -40,8 +44,18 @@ class Player(Entity):
         self.speed_override = None  # Direct speed override with duration
         self.speed_override_duration = 0
         
-    def move(self, keys):
+    def _is_binding_pressed(self, keys, binding):
+        if isinstance(keys, dict):
+            if isinstance(binding, (list, tuple, set)):
+                return any(bool(keys.get(key, False)) for key in binding)
+            return bool(keys.get(binding, False))
+        if isinstance(binding, (list, tuple, set)):
+            return any(keys[key] for key in binding)
+        return keys[binding]
+
+    def move(self, keys, controls=None):
         dx = dy = 0
+        controls = controls or {}
         
         # Check if time is stopped
         if hasattr(self, 'time_stopped') and self.time_stopped:
@@ -49,32 +63,33 @@ class Player(Entity):
             
         # Handle dash movement
         if self.dash_duration > 0:
-            # Dash in the last moved direction or default to up
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                dx = -self.dash_speed
-            elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                dx = self.dash_speed
-            elif keys[pygame.K_UP] or keys[pygame.K_w]:
-                dy = -self.dash_speed
-            elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                dy = self.dash_speed
-            else:
-                dy = -PLAYER_DASH_SPEED  # Default dash upward
+            # Keep dash direction stable for the whole dash window.
+            dx = self.dash_dir[0] * self.dash_speed
+            dy = self.dash_dir[1] * self.dash_speed
         else:
             # Normal movement
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            left_bind = controls.get("left", (pygame.K_LEFT, pygame.K_a))
+            right_bind = controls.get("right", (pygame.K_RIGHT, pygame.K_d))
+            up_bind = controls.get("up", (pygame.K_UP, pygame.K_w))
+            down_bind = controls.get("down", (pygame.K_DOWN, pygame.K_s))
+
+            if self._is_binding_pressed(keys, left_bind):
                 dx = -self.speed
-            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            if self._is_binding_pressed(keys, right_bind):
                 dx = self.speed
-            if keys[pygame.K_UP] or keys[pygame.K_w]:
+            if self._is_binding_pressed(keys, up_bind):
                 dy = -self.speed
-            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            if self._is_binding_pressed(keys, down_bind):
                 dy = self.speed
 
             # Normalize diagonal movement to prevent speed boost
             if dx != 0 and dy != 0:
                 dx *= 0.707
                 dy *= 0.707
+            if dx != 0 or dy != 0:
+                length = (dx * dx + dy * dy) ** 0.5
+                if length > 0:
+                    self.last_move_dir = (dx / length, dy / length)
             
         # Apply movement
         self.x += dx
@@ -109,6 +124,10 @@ class Player(Entity):
         
     def dash(self):
         if self.dash_cooldown <= 0 and self.dash_duration <= 0:
+            if self.last_move_dir[0] == 0 and self.last_move_dir[1] == 0:
+                self.dash_dir = (0, -1)
+            else:
+                self.dash_dir = self.last_move_dir
             self.dash_duration = PLAYER_DASH_DURATION
             self.dash_cooldown = self.dash_cooldown_frames
             self.invincible_time = DAMAGE_INVINCIBILITY_FRAMES  # Increased for full dash coverage
@@ -237,6 +256,9 @@ class Player(Entity):
 
             pygame.draw.rect(screen, (0, 0, 0), rect.inflate(6, 6), border_radius=8)
             pygame.draw.rect(screen, color, rect, border_radius=6)
+            self._draw_hat(screen, rect)
+
+        self._draw_username(screen)
             
         # Draw health bar
         health_bar_width = PLAYER_HEALTH_BAR_WIDTH
@@ -244,3 +266,33 @@ class Player(Entity):
         health_percentage = max(0, self.health / self.max_health)
         pygame.draw.rect(screen, RED, (self.x, self.y - 10, health_bar_width, health_bar_height))
         pygame.draw.rect(screen, GREEN, (self.x, self.y - 10, health_bar_width * health_percentage, health_bar_height))
+
+    def _draw_username(self, screen):
+        username = (self.username or "").strip()
+        if not username:
+            return
+        label_font = pygame.font.Font(None, 18)
+        text = label_font.render(username, True, WHITE)
+        text_rect = text.get_rect(center=(int(self.x + self.width // 2), int(self.y - 22)))
+        screen.blit(text, text_rect)
+
+    def _draw_hat(self, screen, rect):
+        hat = (self.hat_style or "None").lower()
+        if hat == "none":
+            return
+        if hat == "cap":
+            pygame.draw.ellipse(screen, (30, 30, 30), (rect.x + 4, rect.y - 10, rect.width - 8, 7))
+            pygame.draw.rect(screen, (220, 70, 70), (rect.x + 6, rect.y - 15, rect.width - 12, 7), border_radius=3)
+        elif hat == "crown":
+            points = [
+                (rect.x + 5, rect.y - 2),
+                (rect.x + 8, rect.y - 12),
+                (rect.x + rect.width // 2, rect.y - 5),
+                (rect.x + rect.width - 8, rect.y - 12),
+                (rect.x + rect.width - 5, rect.y - 2),
+            ]
+            pygame.draw.polygon(screen, (240, 200, 70), points)
+            pygame.draw.rect(screen, (200, 160, 50), (rect.x + 5, rect.y - 4, rect.width - 10, 3))
+        elif hat == "beanie":
+            pygame.draw.ellipse(screen, (80, 180, 255), (rect.x + 3, rect.y - 12, rect.width - 6, 10))
+            pygame.draw.circle(screen, (240, 240, 240), (rect.centerx, rect.y - 12), 3)

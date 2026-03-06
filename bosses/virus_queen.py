@@ -2,7 +2,7 @@
 import math
 import random
 from core.boss import Boss
-from core.projectile import Projectile
+from core.projectile import Projectile, ProjectileBehavior
 from core.effect import Telegraph, Effect
 from config.constants import WIDTH, HEIGHT, RED, BLUE, GREEN, YELLOW, PURPLE, ORANGE, CYAN
 from utils import load_image_with_transparency
@@ -53,6 +53,7 @@ class TheVirusQueen(Boss):
         self.firewall_cooldown = 0
         self.glitch_storm_cooldown = 0
         self.system_crash_cooldown = 0
+        self.malware_injection_cooldown = 0
         self.split_form = False
         self.second_phase = False
         self.original_health = 600
@@ -95,6 +96,30 @@ class TheVirusQueen(Boss):
         projectile.use_custom_sprite = True
         projectile.custom_sprite = sprite
         projectile.sprite_size = size if size is not None else max(projectile.width, projectile.height)
+
+    def _spawn_projectile(self, x, y, dx, dy, damage, color, radius=5, lifetime=180, behavior=None, sprite_key=None):
+        projectile = Projectile(x, y, dx, dy, damage, color, radius)
+        projectile.lifetime = lifetime
+        if behavior is not None:
+            projectile.behavior = behavior
+        if self.game:
+            projectile._game_ref = self.game
+        if sprite_key:
+            self._apply_attack_sprite(projectile, sprite_key)
+        self.projectiles.append(projectile)
+        return projectile
+
+    def _enforce_attack_limits(self):
+        max_projectiles = 120 + (self.phase - 1) * 45 + (20 if self.split_form else 0)
+        if len(self.projectiles) > max_projectiles:
+            self.projectiles = self.projectiles[-max_projectiles:]
+
+        if len(self.corruptions) > 24:
+            self.corruptions = self.corruptions[-24:]
+        if len(self.antibodies) > 18:
+            self.antibodies = self.antibodies[-18:]
+        if len(self.firewalls) > 12:
+            self.firewalls = self.firewalls[-12:]
         
     def run_attacks(self):
         self.virus_spread_timer -= 1
@@ -106,6 +131,7 @@ class TheVirusQueen(Boss):
         self.firewall_cooldown -= 1
         self.glitch_storm_cooldown -= 1
         self.system_crash_cooldown -= 1
+        self.malware_injection_cooldown -= 1
         
         # Update damage cooldowns
         for proj_id in list(self.damage_cooldowns.keys()):
@@ -145,6 +171,9 @@ class TheVirusQueen(Boss):
             elif self.red_virus_cooldown <= 0:
                 self.red_virus_attack()
                 self.red_virus_cooldown = 150
+            elif self.malware_injection_cooldown <= 0:
+                self.malware_injection_attack(aggressive=False)
+                self.malware_injection_cooldown = 130
             elif self.glitch_storm_cooldown <= 0:
                 self.glitch_storm_attack()
                 self.glitch_storm_cooldown = 160
@@ -162,6 +191,9 @@ class TheVirusQueen(Boss):
             elif self.cluster_burst_cooldown <= 0:
                 self.mega_cluster_burst()
                 self.cluster_burst_cooldown = 120
+            elif self.malware_injection_cooldown <= 0:
+                self.malware_injection_attack(aggressive=True)
+                self.malware_injection_cooldown = 95
             elif self.system_crash_cooldown <= 0:
                 self.system_crash_attack()
                 self.system_crash_cooldown = 180
@@ -171,18 +203,19 @@ class TheVirusQueen(Boss):
         self.update_antibodies()
         self.update_projectiles_with_tracking()
         self.update_firewalls()
+        self._enforce_attack_limits()
         
     def spread_corruption(self):
+        anchor_x = self.x + self.width // 2
+        anchor_y = self.y + self.height // 2
         if self.game and self.game.player:
-            # Spread corruption towards player
-            target_x = self.game.player.x + self.game.player.width // 2
-            target_y = self.game.player.y + self.game.player.height // 2
-            
-            # Create corruption at random positions
-            for _ in range(3):
-                x = self.x + random.randint(-100, 100)
-                y = self.y + random.randint(-100, 100)
-                self.corruptions.append(Corruption(x, y, self.attack_sprites.get("virus_spread")))
+            anchor_x = self.game.player.x + self.game.player.width // 2
+            anchor_y = self.game.player.y + self.game.player.height // 2
+
+        for _ in range(3):
+            x = max(50, min(WIDTH - 50, anchor_x + random.randint(-90, 90)))
+            y = max(70, min(HEIGHT - 50, anchor_y + random.randint(-90, 90)))
+            self.corruptions.append(Corruption(x, y, self.attack_sprites.get("virus_spread")))
                 
     def cluster_burst_attack(self):
         # Create clusters of virus particles that explode
@@ -203,11 +236,12 @@ class TheVirusQueen(Boss):
                 dx = math.cos(particle_angle) * speed
                 dy = math.sin(particle_angle) * speed
                 
-                virus = Projectile(cluster_x, cluster_y, dx, dy, 8, (0, 200, 100), 6)
+                virus = self._spawn_projectile(
+                    cluster_x, cluster_y, dx, dy, 8, (0, 200, 100),
+                    radius=6, lifetime=155, sprite_key="malware_injection"
+                )
                 virus.cluster = True
                 virus.cluster_id = f"cluster_{cluster}_{particle}"
-                self._apply_attack_sprite(virus, "malware_injection")
-                self.projectiles.append(virus)
                 
     def red_virus_attack(self):
         # Create aggressive red virus projectiles
@@ -222,17 +256,17 @@ class TheVirusQueen(Boss):
                 dx = math.cos(angle) * speed
                 dy = math.sin(angle) * speed
                 
-                red_virus = Projectile(
+                red_virus = self._spawn_projectile(
                     self.x + self.width // 2, self.y + self.height // 2,
-                    dx, dy, 12, (255, 50, 50), 8
+                    dx, dy, 12, (255, 50, 50), radius=8, lifetime=210,
+                    behavior=ProjectileBehavior.SEEKING, sprite_key="malware_injection"
                 )
                 red_virus.red_virus = True
+                red_virus.seeking = True
                 red_virus.aggressive_seek = True
                 red_virus.target_x = target_x
                 red_virus.target_y = target_y
                 red_virus.virus_id = f"red_{i}"
-                self._apply_attack_sprite(red_virus, "malware_injection")
-                self.projectiles.append(red_virus)
                 
     def mega_cluster_burst(self):
         # Enhanced cluster burst for phase 3
@@ -253,11 +287,12 @@ class TheVirusQueen(Boss):
                 dx = math.cos(particle_angle) * speed
                 dy = math.sin(particle_angle) * speed
                 
-                virus = Projectile(cluster_x, cluster_y, dx, dy, 10, (255, 100, 0), 7)
+                virus = self._spawn_projectile(
+                    cluster_x, cluster_y, dx, dy, 10, (255, 100, 0),
+                    radius=7, lifetime=165, sprite_key="malware_injection"
+                )
                 virus.mega_cluster = True
                 virus.cluster_id = f"mega_cluster_{cluster}_{particle}"
-                self._apply_attack_sprite(virus, "malware_injection")
-                self.projectiles.append(virus)
                 
         # Add screen shake for impact
         if self.game:
@@ -272,18 +307,24 @@ class TheVirusQueen(Boss):
             self.corruptions.append(Corruption(x, y, self.attack_sprites.get("data_corruption")))
             
     def data_stream_attack(self):
-        # Shoot data packets that leave trails
-        for i in range(5):
-            angle = (math.pi * 2 * i) / 5
-            dx = math.cos(angle) * 5
-            dy = math.sin(angle) * 5
-            projectile = Projectile(
-                self.x + self.width // 2, self.y + self.height // 2,
-                dx, dy, 8, (0, 255, 0), 6
+        # Fan toward player with mild spread so it is readable but threatening.
+        cx = self.x + self.width // 2
+        cy = self.y + self.height // 2
+        if self.game and self.game.player:
+            tx = self.game.player.x + self.game.player.width // 2
+            ty = self.game.player.y + self.game.player.height // 2
+            base_angle = math.atan2(ty - cy, tx - cx)
+            angles = [base_angle + (i - 3) * 0.22 for i in range(7)]
+        else:
+            angles = [(math.pi * 2 * i) / 6 for i in range(6)]
+
+        for angle in angles:
+            dx = math.cos(angle) * 5.3
+            dy = math.sin(angle) * 5.3
+            projectile = self._spawn_projectile(
+                cx, cy, dx, dy, 8, (0, 255, 0), radius=6, lifetime=150, sprite_key="malware_injection"
             )
             projectile.data_trail = True
-            self._apply_attack_sprite(projectile, "malware_injection")
-            self.projectiles.append(projectile)
             
     def enhanced_data_stream(self):
         # More complex data stream with seeking behavior
@@ -293,31 +334,28 @@ class TheVirusQueen(Boss):
             
             for i in range(7):
                 angle = (math.pi * 2 * i) / 7
-                dx = math.cos(angle) * 6
-                dy = math.sin(angle) * 6
-                projectile = Projectile(
+                dx = math.cos(angle) * 5
+                dy = math.sin(angle) * 5
+                projectile = self._spawn_projectile(
                     self.x + self.width // 2, self.y + self.height // 2,
-                    dx, dy, 10, (0, 200, 0), 7
+                    dx, dy, 10, (0, 200, 0), radius=7, lifetime=200,
+                    behavior=ProjectileBehavior.SEEKING, sprite_key="malware_injection"
                 )
                 projectile.seeking = True
                 projectile.target_x = target_x
                 projectile.target_y = target_y
-                self._apply_attack_sprite(projectile, "malware_injection")
-                self.projectiles.append(projectile)
                 
     def viral_barrage(self):
         # Massive bullet hell attack
-        for i in range(20):
+        for i in range(22):
             angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(3, 8)
+            speed = random.uniform(3, 7)
             dx = math.cos(angle) * speed
             dy = math.sin(angle) * speed
-            projectile = Projectile(
+            projectile = self._spawn_projectile(
                 self.x + self.width // 2, self.y + self.height // 2,
-                dx, dy, 5, (128, 255, 0), 4
+                dx, dy, 5, (128, 255, 0), radius=4, lifetime=140, sprite_key="malware_injection"
             )
-            self._apply_attack_sprite(projectile, "malware_injection")
-            self.projectiles.append(projectile)
             
     def mutate(self):
         # Change attack patterns and appearance
@@ -345,17 +383,20 @@ class TheVirusQueen(Boss):
         # Create expanding ring of virus particles
         for ring in range(3):
             radius = 30 + ring * 20
-            for i in range(16):
-                angle = (math.pi * 2 * i) / 16
+            for i in range(12):
+                angle = (math.pi * 2 * i) / 12
                 x = burst_x + math.cos(angle) * radius
                 y = burst_y + math.sin(angle) * radius
-                
-                # Virus particles that seek player
-                virus = Projectile(x, y, 0, 0, 12, self.color, 7)
+
+                outward_angle = math.atan2(y - burst_y, x - burst_x)
+                speed = 2.6 + ring * 0.8
+                virus = self._spawn_projectile(
+                    x, y, math.cos(outward_angle) * speed, math.sin(outward_angle) * speed,
+                    12, self.color, radius=7, lifetime=180, behavior=ProjectileBehavior.MUTATION,
+                    sprite_key="data_corruption"
+                )
                 virus.mutation = True
-                virus.lifetime = 120
-                self._apply_attack_sprite(virus, "data_corruption")
-                self.projectiles.append(virus)
+                virus.homing_delay = random.randint(22, 45)
                 
         # Create mutation visual effect
         for _ in range(50):
@@ -417,11 +458,14 @@ class TheVirusQueen(Boss):
         for _ in range(18):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(3.5, 8.5)
-            p = Projectile(cx, cy, math.cos(angle) * speed, math.sin(angle) * speed, 7, (120, 255, 60), 6)
+            p = self._spawn_projectile(
+                cx, cy, math.cos(angle) * speed, math.sin(angle) * speed,
+                7, (120, 255, 60), radius=6, lifetime=145,
+                behavior=ProjectileBehavior.GLITCH, sprite_key="malware_injection"
+            )
+            p.glitch = True
             p.glitchy = True
             p.erratic = True
-            self._apply_attack_sprite(p, "malware_injection")
-            self.projectiles.append(p)
 
     def system_crash_attack(self):
         """Large corruption burst representing a system-wide crash."""
@@ -431,12 +475,52 @@ class TheVirusQueen(Boss):
         for i in range(28):
             angle = (math.pi * 2 * i) / 28
             speed = 5.5 + (i % 4) * 1.2
-            p = Projectile(cx, cy, math.cos(angle) * speed, math.sin(angle) * speed, 10, (255, 100, 0), 8)
+            p = self._spawn_projectile(
+                cx, cy, math.cos(angle) * speed, math.sin(angle) * speed,
+                10, (255, 100, 0), radius=8, lifetime=190, sprite_key="system_crash"
+            )
             p.system_crash = True
-            self._apply_attack_sprite(p, "system_crash")
-            self.projectiles.append(p)
+
+        for i in range(14):
+            angle = (math.pi * 2 * i) / 14 + math.pi / 14
+            speed = 7.8
+            p = self._spawn_projectile(
+                cx, cy, math.cos(angle) * speed, math.sin(angle) * speed,
+                9, (255, 180, 0), radius=6, lifetime=165, sprite_key="system_crash"
+            )
+            p.system_crash = True
+            p.delay = 12
         if self.game:
             self.game.screen_shake.start(5, 18)
+
+    def malware_injection_attack(self, aggressive=False):
+        """Deploy semi-homing malware packets with staggered timing."""
+        if not (self.game and self.game.player):
+            return
+
+        cx = self.x + self.width // 2
+        cy = self.y + self.height // 2
+        tx = self.game.player.x + self.game.player.width // 2
+        ty = self.game.player.y + self.game.player.height // 2
+        base_angle = math.atan2(ty - cy, tx - cx)
+        count = 6 if not aggressive else 10
+
+        for i in range(count):
+            offset = (i - (count - 1) / 2.0) * (0.22 if not aggressive else 0.16)
+            angle = base_angle + offset
+            speed = 4.8 if not aggressive else 6.0
+            p = self._spawn_projectile(
+                cx, cy, math.cos(angle) * speed, math.sin(angle) * speed,
+                9 if not aggressive else 10, (100, 255, 120), radius=6,
+                lifetime=175 if not aggressive else 210,
+                behavior=ProjectileBehavior.SEEKING, sprite_key="malware_injection"
+            )
+            p.seeking = True
+            p.target_x = tx
+            p.target_y = ty
+            p.malware_packet = True
+            if aggressive and i % 2 == 1:
+                p.delay = 8
                 
     def movement(self):
         # Erratic movement that gets more chaotic in later phases
@@ -498,19 +582,36 @@ class TheVirusQueen(Boss):
     def update_projectiles_with_tracking(self):
         # Update special projectile behavior only.
         # Base Boss.update handles movement/off-screen cleanup for self.projectiles.
+        if not (self.game and self.game.player):
+            return
+
+        tx = self.game.player.x + self.game.player.width // 2
+        ty = self.game.player.y + self.game.player.height // 2
         for projectile in self.projectiles[:]:
+            if hasattr(projectile, 'seeking') and projectile.seeking:
+                projectile.target_x = tx
+                projectile.target_y = ty
+
             if hasattr(projectile, 'erratic') and projectile.erratic:
                 projectile.dx += random.uniform(-0.15, 0.15)
                 projectile.dy += random.uniform(-0.15, 0.15)
+                speed = math.sqrt(projectile.dx * projectile.dx + projectile.dy * projectile.dy)
+                if speed > 9.2:
+                    scale = 9.2 / speed
+                    projectile.dx *= scale
+                    projectile.dy *= scale
+
             if hasattr(projectile, 'aggressive_seek') and projectile.aggressive_seek:
-                if self.game and self.game.player:
-                    tx = self.game.player.x + self.game.player.width // 2
-                    ty = self.game.player.y + self.game.player.height // 2
+                if hasattr(projectile, "steer_towards"):
+                    projectile.steer_towards(tx, ty, desired_speed=6.6, max_turn=0.09, accel=0.28)
+
+            if hasattr(projectile, 'mutation') and projectile.mutation:
+                if getattr(projectile, 'age', 0) >= getattr(projectile, 'homing_delay', 30):
                     if hasattr(projectile, "steer_towards"):
-                        projectile.steer_towards(tx, ty, desired_speed=6.6, max_turn=0.09, accel=0.28)
+                        projectile.steer_towards(tx, ty, desired_speed=4.8, max_turn=0.06, accel=0.20)
 
     def update_firewalls(self):
-        if not self.game:
+        if not self.game or not getattr(self.game, "player", None):
             return
         player_rect = self.game.player.get_rect()
         for wall in self.firewalls[:]:
@@ -583,6 +684,7 @@ class TheVirusQueen(Boss):
             split.mutation_burst_cooldown = self.mutation_burst_cooldown
             split.cluster_burst_cooldown = self.cluster_burst_cooldown
             split.red_virus_cooldown = self.red_virus_cooldown
+            split.malware_injection_cooldown = self.malware_injection_cooldown
             self.game.current_bosses.append(split)
             
             # Update our own name to distinguish from the split

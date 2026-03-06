@@ -21,7 +21,7 @@ class DamageSource(ABC):
         pass
         
     @abstractmethod
-    def check_collision(self, target_rect: pygame.Rect) -> int:
+    def check_collision(self, target_rect: pygame.Rect, target_id=None) -> int:
         """Check collision and return damage amount"""
         pass
         
@@ -45,7 +45,7 @@ class ProjectileDamageSource(DamageSource):
     def update(self):
         return self.projectile.update()
         
-    def check_collision(self, target_rect: pygame.Rect) -> int:
+    def check_collision(self, target_rect: pygame.Rect, target_id=None) -> int:
         if self.projectile.get_rect().colliderect(target_rect):
             return self.projectile.damage
         return 0
@@ -70,7 +70,7 @@ class TelegraphDamageSource(DamageSource):
     def update(self):
         return self.telegraph.update()
         
-    def check_collision(self, target_rect: pygame.Rect) -> int:
+    def check_collision(self, target_rect: pygame.Rect, target_id=None) -> int:
         if hasattr(self.telegraph, 'check_collision'):
             return self.telegraph.check_collision(target_rect)
         return 0
@@ -95,7 +95,7 @@ class HazardDamageSource(DamageSource):
         # Hazard lifetime is managed by boss update, not here
         pass
         
-    def check_collision(self, target_rect: pygame.Rect) -> int:
+    def check_collision(self, target_rect: pygame.Rect, target_id=None) -> int:
         # Use radius if available, otherwise fall back to size
         hazard_radius = self.hazard.get('radius', self.hazard.get('size', 10))
         hazard_rect = pygame.Rect(
@@ -107,7 +107,9 @@ class HazardDamageSource(DamageSource):
         
         if hazard_rect.colliderect(target_rect):
             # Check cooldown using hazard ID
-            hazard_id = id(self.hazard)
+            if target_id is None:
+                target_id = "default"
+            hazard_id = (id(self.hazard), target_id)
             if (hazard_id not in self.damage_cooldown_dict or 
                 self.damage_cooldown_dict[hazard_id] <= 0):
                 dmg = self.hazard.get('damage', 20)

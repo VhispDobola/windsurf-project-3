@@ -30,6 +30,7 @@ class AudioManager:
         self.sound_dir = sound_dir
         self.music_dir = music_dir
         self.sounds: Dict[SoundType, pygame.mixer.Sound] = {}
+        self.custom_sounds: Dict[str, pygame.mixer.Sound] = {}
         self.current_music = None
         self.music_volume = 0.7
         self.sound_volume = 0.8
@@ -83,6 +84,40 @@ class AudioManager:
             sound.play()
         except pygame.error as e:
             self.logger.error("Error playing sound %s: %s", sound_type, e)
+
+    def register_custom_sound(self, sound_id: str, filename: str) -> bool:
+        """Register a custom sound by ID from the sound directory."""
+        if not self.enabled:
+            return False
+
+        path = os.path.join(self.sound_dir, filename)
+        if not os.path.exists(path):
+            self.logger.warning("Custom sound file not found: %s", path)
+            return False
+
+        try:
+            sound = pygame.mixer.Sound(path)
+            sound.set_volume(self.sound_volume)
+            self.custom_sounds[sound_id] = sound
+            return True
+        except pygame.error as e:
+            self.logger.warning("Could not load custom sound %s: %s", filename, e)
+            return False
+
+    def play_custom_sound(self, sound_id: str, volume_scale: float = 1.0):
+        """Play a registered custom sound effect."""
+        if not self.enabled:
+            return
+
+        sound = self.custom_sounds.get(sound_id)
+        if sound is None:
+            return
+
+        try:
+            sound.set_volume(self.sound_volume * volume_scale)
+            sound.play()
+        except pygame.error as e:
+            self.logger.error("Error playing custom sound %s: %s", sound_id, e)
     
     def play_music(self, filename: str, loops: int = -1):
         """Play background music"""
@@ -130,6 +165,8 @@ class AudioManager:
         
         # Update volume for all loaded sounds
         for sound in self.sounds.values():
+            sound.set_volume(self.sound_volume)
+        for sound in self.custom_sounds.values():
             sound.set_volume(self.sound_volume)
     
     def is_music_playing(self) -> bool:

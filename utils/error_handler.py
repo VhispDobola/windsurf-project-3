@@ -17,13 +17,18 @@ class GameErrorHandler:
     def setup_logging(self, log_file=None):
         """Setup logging configuration"""
         if log_file is None:
-            log_file = f"game_errors_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            log_dir = os.path.join("logs", "errors")
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(
+                log_dir,
+                f"game_errors_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            )
         
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler(log_file),
+                logging.FileHandler(log_file, encoding="utf-8"),
                 logging.StreamHandler()
             ]
         )

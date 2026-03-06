@@ -4,9 +4,15 @@ import random
 from core.boss import Boss
 from core.effect import Telegraph
 from config.constants import WIDTH, HEIGHT, BLUE, CYAN, WHITE, GREEN
-from utils import load_image_with_transparency
+from utils import load_image_with_transparency, load_boss_profile
 
 class IceTyrant(Boss):
+    DEFAULT_PHASE_PROFILE = {
+        1: {"blizzard_cd": 180, "spire_cd": 220, "wall_cd": 240, "shatter_cd": 260, "damage_scale": 0.90, "aura_damage": 6},
+        2: {"blizzard_cd": 150, "spire_cd": 190, "wall_cd": 200, "shatter_cd": 250, "damage_scale": 0.93, "aura_damage": 7},
+        3: {"blizzard_cd": 120, "spire_cd": 160, "wall_cd": 165, "shatter_cd": 210, "damage_scale": 0.96, "aura_damage": 8},
+    }
+
     def __init__(self):
         super().__init__(WIDTH // 2 - 65, 100, 130, 130, 720, "Ice Tyrant")
         self.color = (100, 150, 200)
@@ -20,6 +26,7 @@ class IceTyrant(Boss):
         self.shatter_timer = 0
         self.shatter_active = False
         self.ice_walls = []
+        self.phase_profile = load_boss_profile("Ice Tyrant", "phase_profile", self.DEFAULT_PHASE_PROFILE)
 
         try:
             self.sprite = load_image_with_transparency("assets", "sprites", "ice_tyrant.png", transparent_color=(0, 0, 0))
@@ -29,6 +36,7 @@ class IceTyrant(Boss):
             self.use_sprite = False
         
     def run_attacks(self):
+        profile = self.phase_profile.get(self.phase, self.phase_profile[3])
         self.blizzard_timer -= 1
         self.ice_spire_timer -= 1
         self.ice_wall_timer -= 1
@@ -39,42 +47,42 @@ class IceTyrant(Boss):
         if self.phase == 1:
             if self.blizzard_timer <= 0:
                 self.create_frost_wave()
-                self.blizzard_timer = 160
+                self.blizzard_timer = profile["blizzard_cd"]
             if self.ice_spire_timer <= 0:
                 self.create_ice_zone()
-                self.ice_spire_timer = 200
+                self.ice_spire_timer = profile["spire_cd"]
             if self.ice_wall_timer <= 0:
                 self.create_ice_wall_sweep()
-                self.ice_wall_timer = 220
+                self.ice_wall_timer = profile["wall_cd"]
                 
         elif self.phase == 2:
             if self.blizzard_timer <= 0:
                 self.create_blizzard()
-                self.blizzard_timer = 130
+                self.blizzard_timer = profile["blizzard_cd"]
             if self.ice_spire_timer <= 0:
                 self.create_ice_spikes()
-                self.ice_spire_timer = 170
+                self.ice_spire_timer = profile["spire_cd"]
             if self.ice_wall_timer <= 0:
                 self.create_ice_wall_sweep(stronger=True)
-                self.ice_wall_timer = 180
+                self.ice_wall_timer = profile["wall_cd"]
             if self.shatter_timer <= 0:
                 self.trigger_shatter()
-                self.shatter_timer = 240
+                self.shatter_timer = profile["shatter_cd"]
             self.freezing_aura = True
             
         else:  # phase 3
             if self.blizzard_timer <= 0:
                 self.create_absolute_zero()
-                self.blizzard_timer = 100
+                self.blizzard_timer = profile["blizzard_cd"]
             if self.ice_spire_timer <= 0:
                 self.create_ice_prison()
-                self.ice_spire_timer = 140
+                self.ice_spire_timer = profile["spire_cd"]
             if self.ice_wall_timer <= 0:
                 self.create_ice_wall_sweep(stronger=True)
-                self.ice_wall_timer = 140
+                self.ice_wall_timer = profile["wall_cd"]
             if self.shatter_timer <= 0:
                 self.trigger_shatter(duration=120)
-                self.shatter_timer = 200
+                self.shatter_timer = profile["shatter_cd"]
             self.freezing_aura = True
             
         self.movement()
@@ -88,7 +96,7 @@ class IceTyrant(Boss):
         self.frost_waves.append({
             'x': wave_x, 'y': wave_y,
             'radius': 10, 'max_radius': 100,
-            'expanding': True, 'damage': 18,
+            'expanding': True, 'damage': self._scale_damage(18),
             'lifetime': 120, 'slow_effect': 0.5
         })
         self.effects.append(Telegraph(wave_x, wave_y, 100, 100, CYAN))
@@ -102,7 +110,7 @@ class IceTyrant(Boss):
             self.frost_waves.append({
                 'x': wave_x, 'y': wave_y,
                 'radius': 15, 'max_radius': 80,
-                'expanding': True, 'damage': 22,
+                'expanding': True, 'damage': self._scale_damage(22),
                 'lifetime': 100, 'slow_effect': 0.4
             })
             
@@ -116,7 +124,7 @@ class IceTyrant(Boss):
         self.frost_waves.append({
             'x': wave_x, 'y': wave_y,
             'radius': 20, 'max_radius': 150,
-            'expanding': True, 'damage': 35,
+            'expanding': True, 'damage': self._scale_damage(35),
             'lifetime': 90, 'slow_effect': 0.2
         })
         self.effects.append(Telegraph(wave_x, wave_y, 150, 150, WHITE))
@@ -129,7 +137,7 @@ class IceTyrant(Boss):
         self.ice_zones.append({
             'x': zone_x, 'y': zone_y,
             'radius': 50, 'lifetime': 350,
-            'damage': 12, 'slow_amount': 0.6
+            'damage': self._scale_damage(12), 'slow_amount': 0.6
         })
         self.effects.append(Telegraph(zone_x, zone_y, 50, 50, BLUE))
         
@@ -146,7 +154,7 @@ class IceTyrant(Boss):
             self.ice_zones.append({
                 'x': spike_x, 'y': spike_y,
                 'radius': 35, 'lifetime': 280,
-                'damage': 15, 'slow_amount': 0.5
+                'damage': self._scale_damage(15), 'slow_amount': 0.5
             })
             
         self.effects.append(Telegraph(center_x, center_y, 120, 120, CYAN))
@@ -161,7 +169,7 @@ class IceTyrant(Boss):
                 self.ice_zones.append({
                     'x': x, 'y': y,
                     'radius': 60, 'lifetime': 250,
-                    'damage': 20, 'slow_amount': 0.3
+                    'damage': self._scale_damage(20), 'slow_amount': 0.3
                 })
                 
         self.effects.append(Telegraph(WIDTH // 2, HEIGHT // 2, 200, 200, WHITE))
@@ -178,8 +186,8 @@ class IceTyrant(Boss):
             'vy': 0,
             'vx': 6 if stronger else 4,
             'gap_y': gap_y,
-            'gap_h': 120 if stronger else 150,
-            'damage': 18 if stronger else 12,
+            'gap_h': 130 if stronger else 150,
+            'damage': self._scale_damage(16 if stronger else 11),
             'lifetime': 160
         }
         self.ice_walls.append(wall)
@@ -191,6 +199,10 @@ class IceTyrant(Boss):
         self.shatter_timer = duration
         if self.game:
             self.game.screen_shake.start(3, 12)
+
+    def _scale_damage(self, base_damage):
+        profile = self.phase_profile.get(self.phase, self.phase_profile[3])
+        return max(1, int(base_damage * profile["damage_scale"]))
         
     def create_slow_zone(self):
         # Create zone that only slows, no damage
@@ -236,7 +248,7 @@ class IceTyrant(Boss):
                     self.game.player.add_speed_modifier(wave['slow_effect'], 30)
                     
                     # Apply damage
-                    if not hasattr(wave, 'damage_cooldown') or wave['damage_cooldown'] <= 0:
+                    if 'damage_cooldown' not in wave or wave['damage_cooldown'] <= 0:
                         self.game.player.take_damage(wave['damage'])
                         wave['damage_cooldown'] = 40
                     else:
@@ -260,7 +272,7 @@ class IceTyrant(Boss):
                         self.game.player.add_speed_modifier(zone['slow_amount'], 20)
                         
                         # Apply damage over time
-                        if not hasattr(zone, 'damage_cooldown') or zone['damage_cooldown'] <= 0:
+                        if 'damage_cooldown' not in zone or zone['damage_cooldown'] <= 0:
                             self.game.player.take_damage(zone['damage'])
                             zone['damage_cooldown'] = 60
                         else:
@@ -289,7 +301,8 @@ class IceTyrant(Boss):
             if boss_rect.inflate(80, 80).colliderect(player_rect):
                 self.game.player.add_speed_modifier(0.7, 15)
                 if not hasattr(self, 'aura_damage_cooldown') or self.aura_damage_cooldown <= 0:
-                    self.game.player.take_damage(8)
+                    profile = self.phase_profile.get(self.phase, self.phase_profile[3])
+                    self.game.player.take_damage(profile["aura_damage"])
                     self.aura_damage_cooldown = 45
                 else:
                     self.aura_damage_cooldown -= 1
