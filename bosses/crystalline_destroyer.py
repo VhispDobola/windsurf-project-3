@@ -429,16 +429,8 @@ class CrystallineDestroyer(MultiStageBoss):
         for effect in self.effects:
             effect.draw(screen)
             
-        # Use the base health bar drawing with custom color
+        # Shared fight HUD owns the active boss label and stage text.
         self.health_bar_color = self.current_stage.color
         self.draw_health_bar(screen)
-        
-        # Stage name
-        if self.should_draw_single_health_bar():
-            stage_text = f"Stage {self.current_stage_index + 1}: {self.current_stage.name}"
-            font = pygame.font.Font(None, 24)
-            text = font.render(stage_text, True, WHITE)
-            text_rect = text.get_rect(center=(screen.get_width() // 2, 15))
-            screen.blit(text, text_rect)
 
 

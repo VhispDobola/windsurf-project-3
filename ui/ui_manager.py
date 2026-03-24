@@ -509,80 +509,148 @@ class UIManager:
             username = getattr(player, "username", f"P{i + 1}") or f"P{i + 1}"
             text = self.font_tiny.render(f"{username}: {status}", True, label_color)
             screen.blit(text, (panel_x + 10, panel_y + 30 + (i * 26)))
-            
-    def draw_boss_intro(self, screen, boss_name, hint_text=None):
-        # Start animated boss intro
-        if not self.boss_animator.current_boss or self.boss_animator.current_boss != boss_name:
-            self.boss_animator.start_animation(boss_name)
-        
-        # Update and draw animation
-        self.boss_animator.update()
-        self.boss_animator.draw(screen, self.font_large, self.font_medium)
+
+    def _format_boss_display_name(self, boss):
+        name_text = str(getattr(boss, "name", "Boss")).strip()
+        if "The Virus Queen" in name_text:
+            if "(Original)" in name_text:
+                name_text = "Virus Queen I"
+            elif "(Split)" in name_text:
+                name_text = "Virus Queen II"
+            else:
+                name_text = "Virus Queen"
+        if hasattr(boss, "is_weakened") and boss.is_weakened:
+            name_text += " [Weakened]"
+        return name_text
+
+    def _fit_text(self, text, max_width, preferred_size, min_size=18):
+        size = preferred_size
+        while size >= min_size:
+            font = self._get_font(size)
+            if font.size(text)[0] <= max_width:
+                return font
+            size -= 2
+        return self._get_font(min_size)
+
+    def _get_boss_status_text(self, boss):
+        current_stage = getattr(boss, "current_stage", None)
+        current_stage_index = getattr(boss, "current_stage_index", None)
+        if current_stage and current_stage_index is not None and hasattr(current_stage, "name"):
+            return f"Stage {current_stage_index + 1}: {current_stage.name}"
+
+        phase = getattr(boss, "phase", None)
+        if isinstance(phase, int) and phase > 1:
+            return f"Phase {phase}"
+
+        return ""
+
+    def draw_boss_intro(self, screen, bosses, hint_text=None):
+        if not bosses:
+            return True
+
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((4, 6, 10, 170))
+        screen.blit(overlay, (0, 0))
+
+        panel_w = min(screen.get_width() - 80, 760)
+        panel_h = 220 if len(bosses) == 1 else 270
+        panel = pygame.Rect((screen.get_width() - panel_w) // 2, 110, panel_w, panel_h)
+        self._draw_panel(screen, panel, (16, 20, 28), (200, 170, 90))
+
+        title = "BOSS APPROACHING" if len(bosses) == 1 else "DUAL THREAT"
+        self._draw_center_text(screen, title, self.font_medium, panel.y + 36, YELLOW)
+
+        if len(bosses) == 1:
+            boss = bosses[0]
+            name_text = self._format_boss_display_name(boss)
+            font = self._fit_text(name_text, panel.width - 60, 54, min_size=28)
+            name = font.render(name_text, True, getattr(boss, "health_bar_color", WHITE))
+            screen.blit(name, name.get_rect(center=(panel.centerx, panel.centery - 10)))
+        else:
+            card_gap = 18
+            card_w = (panel.width - 50 - card_gap) // 2
+            card_h = 126
+            start_x = panel.x + 20
+            card_y = panel.y + 74
+            for index, boss in enumerate(bosses[:2]):
+                card = pygame.Rect(start_x + index * (card_w + card_gap), card_y, card_w, card_h)
+                accent = getattr(boss, "health_bar_color", WHITE)
+                self._draw_panel(screen, card, (22, 26, 34), accent)
+                slot = self.font_tiny.render(f"TARGET {index + 1}", True, (220, 220, 230))
+                screen.blit(slot, (card.x + 14, card.y + 12))
+                name_text = self._format_boss_display_name(boss)
+                font = self._fit_text(name_text, card.width - 28, 30, min_size=20)
+                name = font.render(name_text, True, WHITE)
+                screen.blit(name, (card.x + 14, card.y + 44))
+                sub = self.font_tiny.render("Prepare for overlapping patterns", True, (170, 185, 205))
+                screen.blit(sub, (card.x + 14, card.y + 84))
 
         if hint_text:
-            hint_color = (220, 220, 220)
-            hint_surf = self.font_small.render(hint_text, True, hint_color)
-            hint_rect = hint_surf.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2 + 130))
-            screen.blit(hint_surf, hint_rect)
-        
-        return self.boss_animator.is_animation_complete()
-        
-    def draw_multiple_health_bars(self, screen, bosses):
-        """Draw health bars for multiple bosses"""
+            hint_lines = self._wrap_text(hint_text, self.font_small, panel.width - 50)
+            base_y = panel.bottom - 52
+            for idx, line in enumerate(hint_lines[:2]):
+                hint_surf = self.font_small.render(line, True, (220, 220, 220))
+                screen.blit(hint_surf, hint_surf.get_rect(center=(panel.centerx, base_y + idx * 22)))
+
+        return True
+
+    def draw_boss_hud(self, screen, bosses):
         if not bosses:
             return
 
         screen_width = screen.get_width()
-            
-        bar_width = 250
-        bar_height = 6
-        bar_spacing = 40
-        total_width = (bar_width * len(bosses)) + (bar_spacing * (len(bosses) - 1))
+        count = len(bosses)
+        bar_height = 12
+        top_y = 22
+        side_margin = 24
+        gap = 18
+        total_gap = gap * (count - 1)
+        available_width = screen_width - (side_margin * 2) - total_gap
+        bar_width = max(220, min(420, available_width // max(1, count)))
+        total_width = bar_width * count + total_gap
         start_x = (screen_width - total_width) // 2
-        bar_y = 30
-        
-        font = pygame.font.Font(None, 20)
-        
-        for i, boss in enumerate(bosses):
-            x = start_x + i * (bar_width + bar_spacing)
-            
-            # Boss name
-            name_text = boss.name
-            # Special handling for Virus Queen splits to show cleaner names
-            if "The Virus Queen" in boss.name:
-                if "(Original)" in boss.name:
-                    name_text = "Virus Queen (1)"
-                elif "(Split)" in boss.name:
-                    name_text = "Virus Queen (2)"
-                else:
-                    name_text = "Virus Queen"
-                    
-            if hasattr(boss, 'is_weakened') and boss.is_weakened:
-                name_text += " (Weakened)"
-            
-            name_surf = font.render(name_text, True, WHITE)
-            name_rect = name_surf.get_rect(center=(x + bar_width // 2, bar_y - 10))
-            screen.blit(name_surf, name_rect)
-            
-            # Health bar background and border stay readable across all boss colors.
-            background_rect = pygame.Rect(x, bar_y, bar_width, bar_height)
-            pygame.draw.rect(screen, (45, 10, 10), background_rect)
-            pygame.draw.rect(screen, WHITE, background_rect, 1)
-            
-            # Health fill
-            max_health = max(1, boss.max_health)
-            health_percentage = max(0.0, min(1.0, boss.health / max_health))
-            health_color = getattr(boss, 'health_bar_color', GREEN)
-            fill_width = int(bar_width * health_percentage)
-            if boss.health > 0 and fill_width <= 0:
-                fill_width = 1
-            pygame.draw.rect(screen, health_color, (x, bar_y, fill_width, bar_height))
 
-            # Phase markers
-            marker_color = (30, 30, 30)
+        for idx, boss in enumerate(bosses):
+            x = start_x + idx * (bar_width + gap)
+            label_text = self._format_boss_display_name(boss)
+            label_font = self._fit_text(label_text, bar_width, 24, min_size=16)
+            label = label_font.render(label_text, True, WHITE)
+            screen.blit(label, label.get_rect(center=(x + bar_width // 2, top_y)))
+
+            status_text = self._get_boss_status_text(boss)
+            status_y = top_y + 20
+            if status_text:
+                status_font = self._fit_text(status_text, bar_width, 18, min_size=14)
+                status = status_font.render(status_text, True, (170, 185, 205))
+                screen.blit(status, status.get_rect(center=(x + bar_width // 2, status_y)))
+
+            value_font = self._get_font(18)
+            value_text = f"{max(0, int(getattr(boss, 'health', 0)))}/{max(1, int(getattr(boss, 'max_health', 1)))}"
+            value = value_font.render(value_text, True, (200, 210, 220))
+            value_y = top_y + (42 if status_text else 22)
+            screen.blit(value, value.get_rect(center=(x + bar_width // 2, value_y)))
+
+            bar_y = top_y + (58 if status_text else 38)
+            background_rect = pygame.Rect(x, bar_y, bar_width, bar_height)
+            pygame.draw.rect(screen, (24, 24, 30), background_rect, border_radius=6)
+            pygame.draw.rect(screen, (240, 240, 245), background_rect, 1, border_radius=6)
+
+            max_health = max(1, getattr(boss, "max_health", 1))
+            health_percentage = max(0.0, min(1.0, getattr(boss, "health", 0) / max_health))
+            fill_width = int(bar_width * health_percentage)
+            if getattr(boss, "health", 0) > 0 and fill_width <= 0:
+                fill_width = 1
+            fill_rect = pygame.Rect(x, bar_y, fill_width, bar_height)
+            pygame.draw.rect(
+                screen,
+                getattr(boss, "health_bar_color", GREEN),
+                fill_rect,
+                border_radius=6,
+            )
+
             for threshold in (0.6, 0.3):
                 marker_x = x + int(bar_width * threshold)
-                pygame.draw.line(screen, marker_color, (marker_x, bar_y - 2), (marker_x, bar_y + bar_height + 2), 2)
+                pygame.draw.line(screen, (40, 40, 50), (marker_x, bar_y - 3), (marker_x, bar_y + bar_height + 3), 2)
         
     def draw_victory(self, screen, score, time):
         screen_width = screen.get_width()

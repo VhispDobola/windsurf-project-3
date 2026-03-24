@@ -211,17 +211,11 @@ class Boss(Entity):
             marker_x = bar_x + int(health_bar_width * threshold)
             pygame.draw.line(screen, marker_color, (marker_x, bar_y - 2), (marker_x, bar_y + health_bar_height + 2), 2)
         
-        # Boss name
-        font = pygame.font.Font(None, 24)
-        text = font.render(self.name, True, WHITE)
-        text_rect = text.get_rect(center=(screen_width // 2, bar_y - 15))
-        screen.blit(text, text_rect)
-
     def should_draw_single_health_bar(self):
-        """Single boss bars are hidden when the UI is rendering multi-boss bars."""
+        """Legacy per-boss top bars are hidden when the shared fight HUD is active."""
         if not self.game or not hasattr(self.game, "current_bosses"):
             return True
-        return len(self.game.current_bosses) <= 1
+        return len(self.game.current_bosses) == 0
         
     def safe_list_iteration(self, lst, update_func):
         """Safely iterate and update a list, removing items during iteration"""

@@ -54,8 +54,7 @@ def draw(game):
     elif game.state == GameState.BOSS_INTRO:
         game._draw_arena_background(game.screen)
         if game.current_bosses:
-            boss_names = " & ".join([boss.name for boss in game.current_bosses])
-            game.ui_manager.draw_boss_intro(game.screen, boss_names, game._get_boss_hint_text())
+            game.ui_manager.draw_boss_intro(game.screen, game.current_bosses, game._get_boss_hint_text())
     elif game.state == GameState.FIGHTING:
         game.render_system.width = game.screen.get_width()
         game.render_system.height = game.screen.get_height()
@@ -66,9 +65,7 @@ def draw(game):
         draw_offscreen_indicators(game)
         game.damage_numbers.draw(game.screen)
         game.ui_manager.draw_player_status(game.screen, game.players)
-
-        if len(game.current_bosses) > 1:
-            game.ui_manager.draw_multiple_health_bars(game.screen, game.current_bosses)
+        game.ui_manager.draw_boss_hud(game.screen, game.current_bosses)
     elif game.state == GameState.UPGRADE:
         game.screen.fill(BLACK)
         title = "POWER UPGRADE" if getattr(game, "milestone_upgrade_round", False) else "CHOOSE UPGRADE"
