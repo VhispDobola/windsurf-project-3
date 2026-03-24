@@ -26,7 +26,7 @@ def run_network_client():
         player_index = player_slot - 1
 
     progression = ProgressionSystem()
-    identity = progression.get_player_identity()
+    identity = progression.get_lobby_profile()
     client = NetworkClient(host, port, player_index=player_index, profile=identity)
     try:
         client.connect()
@@ -38,7 +38,8 @@ def run_network_client():
         return
 
     assigned_slot = client.assigned_player_slot or player_slot or 2
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    info = pygame.display.Info()
+    screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
     pygame.display.set_caption(f"Boss Rush Game (LAN Client P{assigned_slot})")
     clock = pygame.time.Clock()
     running = True
@@ -88,7 +89,11 @@ def run_network_client():
                     raw = zlib.decompress(packed)
                     latest_surface = pygame.image.fromstring(raw, (w, h), "RGB")
                     if screen.get_width() != w or screen.get_height() != h:
-                        screen = pygame.display.set_mode((w, h))
+                        display_info = pygame.display.Info()
+                        screen = pygame.display.set_mode(
+                            (display_info.current_w, display_info.current_h),
+                            pygame.FULLSCREEN,
+                        )
                 except (zlib.error, ValueError):
                     latest_surface = None
             elif update_type == "state":

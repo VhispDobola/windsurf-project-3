@@ -352,6 +352,24 @@ class ProgressionSystem:
         identity["color"] = tuple(color) if isinstance(color, list) else tuple(color)
         return identity
 
+    def get_lobby_profile(self):
+        identity = self.get_player_identity()
+        loadout = []
+        for relic_id in self.get_equipped_relics():
+            if not relic_id:
+                continue
+            relic = self.relic_definitions.get(relic_id, {})
+            entry = self.get_relic_entry(relic_id)
+            loadout.append(
+                {
+                    "id": relic_id,
+                    "name": relic.get("name", relic_id),
+                    "rank": int(entry.get("rank", 1)),
+                }
+            )
+        identity["loadout"] = loadout
+        return identity
+
     def update_player_identity(self, username=None, color=None, hat=None):
         identity = self.profile.get("player_identity", {})
         if username is not None:

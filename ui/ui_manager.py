@@ -104,28 +104,24 @@ class UIManager:
         return surf
 
     def draw_menu(self, screen):
-        screen_width = screen.get_width()
         screen_height = screen.get_height()
 
-        self._draw_center_text(screen, "BOSS RUSH", self.font_large, screen_height // 3, WHITE)
+        self._draw_center_text(screen, "BOSS RUSH", self.font_large, screen_height // 3, YELLOW)
         self._draw_center_text(screen, "Press SPACE to Start", self.font_medium, screen_height // 2, YELLOW)
         self._draw_center_text(screen, "Press C to Customize", self.font_small, screen_height // 2 + 36, GREEN)
         self._draw_center_text(screen, "Press P for Progression", self.font_small, screen_height // 2 + 68, (120, 220, 255))
         self._draw_center_text(screen, "Press H to Host Online Lobby", self.font_small, screen_height // 2 + 100, (140, 255, 180))
         self._draw_center_text(screen, "Press J to Join Multiplayer", self.font_small, screen_height // 2 + 132, (150, 220, 255))
-        
-        controls = [
-            "P1: WASD + LSHIFT + SPACE/Mouse",
-            "P2/P3/P4: LAN client slots 2/3/4",
-            "F11: Toggle Fullscreen"
-        ]
-        
-        y = int(screen_height * 0.64)
-        for control in controls:
-            text = self.font_small.render(control, True, WHITE)
-            text_rect = text.get_rect(center=(screen_width // 2, y))
-            screen.blit(text, text_rect)
-            y += 30
+
+    def _format_loadout_text(self, loadout):
+        if not loadout:
+            return "Loadout: Empty"
+        parts = []
+        for relic in loadout[:4]:
+            name = str(relic.get("name", "Relic")).strip() or "Relic"
+            rank = max(1, int(relic.get("rank", 1)))
+            parts.append(f"{name} R{rank}")
+        return "Loadout: " + " | ".join(parts)
 
     def draw_join_setup(self, screen, host, port, slot_label, selected_field, status_message=None):
         screen_w = screen.get_width()
@@ -190,6 +186,7 @@ class UIManager:
         username,
         color,
         hat_style,
+        loadout,
         status_text,
         status_color,
         ping_text=None,
@@ -208,6 +205,11 @@ class UIManager:
         screen.blit(status, (rect.x + 84, rect.y + 46))
         hat = self.font_tiny.render(f"Hat: {hat_style}", True, (190, 205, 220))
         screen.blit(hat, (rect.x + 84, rect.y + 68))
+        loadout_text = self._format_loadout_text(loadout)
+        loadout_lines = self._wrap_text(loadout_text, self.font_tiny, rect.width - 100)
+        for idx, line in enumerate(loadout_lines[:2]):
+            line_surf = self.font_tiny.render(line, True, (205, 215, 230))
+            screen.blit(line_surf, (rect.x + 18, rect.y + 84 + idx * 18))
         if ping_text:
             ping = self.font_tiny.render(ping_text, True, (150, 220, 255))
             screen.blit(ping, (rect.right - ping.get_width() - 14, rect.y + 18))
@@ -221,8 +223,8 @@ class UIManager:
         if host_address:
             self._draw_center_text(screen, f"Join address: {host_address}", self.font_tiny, 124, (150, 220, 255))
 
-        start_y = 170
-        card_h = 102
+        start_y = 160
+        card_h = 126
         gap = 14
         card_w = min(620, screen_w - 120)
         start_x = (screen_w - card_w) // 2
@@ -236,6 +238,7 @@ class UIManager:
                 profile.get("username", f"P{slot.get('slot', index + 1)}"),
                 tuple(profile.get("color", (0, 100, 255))),
                 profile.get("hat", "None"),
+                profile.get("loadout", []),
                 slot.get("status", "Open Slot"),
                 slot.get("status_color", (180, 180, 190)),
                 ping_text=slot.get("ping_text"),

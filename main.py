@@ -58,14 +58,12 @@ class Game:
         # Initialize pygame first
         self.error_handler.safe_pygame_operation(init_pygame)
 
-        self.fullscreen = False
+        self.fullscreen = True
         self._windowed_size = (WIDTH, HEIGHT)
-        self.screen = self.error_handler.safe_pygame_operation(
-            lambda: pygame.display.set_mode((WIDTH, HEIGHT))
-        )
+        self.screen = self.error_handler.safe_pygame_operation(self._create_default_display)
         if not self.screen:
             # Fallback to direct pygame initialization
-            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+            self.screen = self._create_default_display()
         pygame.display.set_caption("Boss Rush Game")
         self.clock = pygame.time.Clock()
         self.running = True
@@ -320,15 +318,24 @@ class Game:
         return GameState.MENU
 
     def _build_local_lobby_profile(self):
+        profile = self.progression_system.get_lobby_profile()
         if self.player_customizations:
-            profile = self.player_customizations[0]
+            customization = self.player_customizations[0]
         else:
-            profile = self._default_customization(0)
-        return {
-            "username": str(profile.get("username", "Player")).strip()[:16] or "Player",
-            "color": list(profile.get("color", (0, 100, 255))),
-            "hat": str(profile.get("hat", "None")).strip() or "None",
-        }
+            customization = self._default_customization(0)
+        profile["username"] = (
+            str(customization.get("username", profile.get("username", "Player"))).strip()[:16]
+            or "Player"
+        )
+        profile["color"] = list(customization.get("color", profile.get("color", (0, 100, 255))))
+        profile["hat"] = str(customization.get("hat", profile.get("hat", "None"))).strip() or "None"
+        return profile
+
+    def _create_default_display(self):
+        if self.fullscreen:
+            info = pygame.display.Info()
+            return pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
+        return pygame.display.set_mode((WIDTH, HEIGHT))
 
     def get_display_host_address(self):
         if self.network_mode != "host":

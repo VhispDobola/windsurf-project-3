@@ -28,10 +28,31 @@ def _sanitize_profile(profile):
     if not isinstance(color, (list, tuple)) or len(color) != 3:
         color = [0, 100, 255]
     hat = str(profile.get("hat", "None")).strip() or "None"
+    raw_loadout = profile.get("loadout", [])
+    loadout = []
+    if isinstance(raw_loadout, list):
+        for entry in raw_loadout[:4]:
+            if not isinstance(entry, dict):
+                continue
+            relic_name = str(entry.get("name", "")).strip()[:32]
+            if not relic_name:
+                continue
+            try:
+                rank = int(entry.get("rank", 1))
+            except (TypeError, ValueError):
+                rank = 1
+            loadout.append(
+                {
+                    "id": str(entry.get("id", "")).strip()[:48],
+                    "name": relic_name,
+                    "rank": max(1, min(99, rank)),
+                }
+            )
     return {
         "username": username,
         "color": [max(0, min(255, int(channel))) for channel in color],
         "hat": hat,
+        "loadout": loadout,
     }
 
 
