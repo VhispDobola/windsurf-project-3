@@ -11,6 +11,26 @@ def draw(game):
     if game.state == GameState.MENU:
         game.screen.fill(BLACK)
         game.ui_manager.draw_menu(game.screen)
+    elif game.state == GameState.LOBBY:
+        game.screen.fill(BLACK)
+        game.ui_manager.draw_lobby(
+            game.screen,
+            game.get_lobby_slots(),
+            local_slot=1,
+            host_address=game.get_display_host_address(),
+            can_start=game.can_start_from_lobby(),
+            host_mode=True,
+        )
+    elif game.state == GameState.JOIN_SETUP:
+        game.screen.fill(BLACK)
+        game.ui_manager.draw_join_setup(
+            game.screen,
+            game.join_menu_host,
+            game.join_menu_port,
+            game.get_join_slot_label(),
+            game.join_menu_field_index,
+            game.join_menu_status,
+        )
     elif game.state == GameState.CUSTOMIZATION:
         game.screen.fill(BLACK)
         game.ui_manager.draw_customization(
@@ -20,6 +40,16 @@ def draw(game):
             game.customization_field_index,
             game.color_options,
             game.hat_options,
+        )
+    elif game.state == GameState.PROGRESSION:
+        game.screen.fill(BLACK)
+        game.ui_manager.draw_progression_menu(
+            game.screen,
+            game.progression_system,
+            game.progression_selected_relic_index,
+            game.progression_selected_slot_index,
+            game.progression_focus_area,
+            game.progression_status_message,
         )
     elif game.state == GameState.BOSS_INTRO:
         game._draw_arena_background(game.screen)
@@ -41,7 +71,9 @@ def draw(game):
             game.ui_manager.draw_multiple_health_bars(game.screen, game.current_bosses)
     elif game.state == GameState.UPGRADE:
         game.screen.fill(BLACK)
-        game.ui_manager.draw_upgrade_screen(game.screen, game.pending_upgrades, game.hovered_upgrade_index)
+        title = "POWER UPGRADE" if getattr(game, "milestone_upgrade_round", False) else "CHOOSE UPGRADE"
+        subtitle = "Boss milestone reward" if getattr(game, "milestone_upgrade_round", False) else "Press 1-4 or Click to pick"
+        game.ui_manager.draw_upgrade_screen(game.screen, game.pending_upgrades, game.hovered_upgrade_index, title=title, subtitle=subtitle)
     elif game.state == GameState.VICTORY:
         game.screen.fill(BLACK)
         game.ui_manager.draw_victory(game.screen, game.score, game.total_time)
@@ -59,6 +91,8 @@ def draw(game):
 
     if game.network_mode == "host" and game.network_host:
         _draw_host_network_overlay(game)
+
+    game.ui_manager.draw_reward_toasts(game.screen, getattr(game, "reward_toasts", []))
 
     if game.screen_shake.duration > 0:
         game.screen_shake.apply_offset(game.screen)

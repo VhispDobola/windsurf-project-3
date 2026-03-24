@@ -105,9 +105,9 @@ class Projectile(Entity):
                     self.dy += random.uniform(-2, 2)
                     
             elif self.behavior == ProjectileBehavior.MUTATION:
-                if random.random() < 0.05:
+                if random.random() < 0.025:
                     self.damage += 1
-                    self.radius = min(self.radius + 1, 15)
+                    self.radius = min(self.radius + 1, 12)
                     
             elif self.behavior == ProjectileBehavior.BOUNCING:
                 # Bounce off walls - use screen dimensions from game if available

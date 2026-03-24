@@ -4,7 +4,9 @@ import zlib
 import pygame
 
 from config.constants import WIDTH, HEIGHT, FPS, init_pygame
+from core.progression_system import ProgressionSystem
 from core.network_sync import NetworkClient
+from ui import UIManager
 
 
 def run_network_client():
@@ -23,7 +25,9 @@ def run_network_client():
         player_slot = max(2, min(4, player_slot))
         player_index = player_slot - 1
 
-    client = NetworkClient(host, port, player_index=player_index)
+    progression = ProgressionSystem()
+    identity = progression.get_player_identity()
+    client = NetworkClient(host, port, player_index=player_index, profile=identity)
     try:
         client.connect()
     except (OSError, TimeoutError) as exc:
@@ -41,6 +45,7 @@ def run_network_client():
     latest_surface = None
     latest_state = None
     font = pygame.font.Font(None, 24)
+    ui_manager = UIManager()
     ready = False
     controls = {
         "left": pygame.K_LEFT,
@@ -77,6 +82,7 @@ def run_network_client():
             if update_type == "frame":
                 w = int(update.get("w", WIDTH))
                 h = int(update.get("h", HEIGHT))
+                latest_state = update.get("state", latest_state)
                 packed = update.get("data", b"")
                 try:
                     raw = zlib.decompress(packed)
@@ -88,7 +94,23 @@ def run_network_client():
             elif update_type == "state":
                 latest_state = update.get("state", {})
 
-        if client.sync_mode == "state":
+        if isinstance(latest_state, dict) and latest_state.get("game_state") == "lobby":
+            screen.fill((12, 14, 20))
+            lobby_slots = latest_state.get("lobby", [])
+            can_start = all(
+                bool(slot.get("ready", False) or slot.get("slot") == 1)
+                for slot in lobby_slots
+                if slot.get("connected")
+            )
+            ui_manager.draw_lobby(
+                screen,
+                lobby_slots,
+                local_slot=assigned_slot,
+                host_address=latest_state.get("host_address"),
+                can_start=can_start,
+                host_mode=False,
+            )
+        elif client.sync_mode == "state":
             screen.fill((15, 18, 24))
             title = font.render(f"Authoritative State Sync | P{assigned_slot}", True, (220, 220, 220))
             screen.blit(title, (16, 12))

@@ -54,6 +54,7 @@ class NexusCore(Boss):
         self.hazard_timer = 0
         self.arena_hazards = []
         self.hitbox_scale = 0.82
+        self.health_bar_color = CYAN
         self.phase_profile = load_boss_profile("Nexus Core", "phase_profile", self.DEFAULT_PHASE_PROFILE)
         
         # Hazard damage cooldown to prevent damage spam
@@ -241,16 +242,23 @@ class NexusCore(Boss):
         self.game.player.projectiles = remaining_projectiles
                     
     def create_arena_hazards(self):
+        player = self.game.player if self.game and getattr(self.game, "player", None) else None
         for i in range(5):
-            x = random.randint(100, WIDTH - 100)
-            y = random.randint(200, HEIGHT - 100)
+            if player and i < 3:
+                anchor_x = player.x + player.width // 2
+                anchor_y = player.y + player.height // 2
+                x = max(90, min(WIDTH - 90, anchor_x + random.randint(-120, 120)))
+                y = max(170, min(HEIGHT - 90, anchor_y + random.randint(-110, 110)))
+            else:
+                x = random.randint(100, WIDTH - 100)
+                y = random.randint(200, HEIGHT - 100)
             self.arena_hazards.append({
                 'x': x,
                 'y': y,
-                'radius': 30,
+                'radius': 42,
                 'lifetime': 240,
-                'damage': 12,
-                'damage_cooldown': 45,
+                'damage': 14,
+                'damage_cooldown': 36,
                 'ability_name': 'Arena Hazard',
             })
             
@@ -303,8 +311,8 @@ class NexusCore(Boss):
                 color = (255, int(100 * alpha), 0)
                 pygame.draw.circle(screen, color, (hazard['x'], hazard['y']), hazard['radius'], 2)
 
-        # Ensure HP bar always renders in sprite mode.
-        self.health_bar_color = RED
+        # Ensure HP bar always renders in sprite mode with a fill color distinct from the background.
+        self.health_bar_color = CYAN
         self.draw_health_bar(screen)
 
 

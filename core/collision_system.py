@@ -54,6 +54,8 @@ class CollisionSystem:
             # Handle projectile and effect collisions with spatial optimization
             for damage_source in damage_sources:
                 if damage_source.active:
+                    if hasattr(damage_source, 'projectile') and self._try_reflect_projectile(active_player, damage_source, bosses):
+                        continue
                     damage = damage_source.check_collision(player_rect, target_id=id(active_player))
                     if damage > 0:
                         damage = int(damage * getattr(damage_source, 'damage_scale', 1.0))
@@ -71,6 +73,38 @@ class CollisionSystem:
             self._handle_player_projectiles(active_player, bosses)
 
         return total_damage
+
+    def _try_reflect_projectile(self, player, damage_source, bosses):
+        projectile = getattr(damage_source, 'projectile', None)
+        if projectile is None:
+            return False
+        if not getattr(player, 'reflect_shield', False):
+            return False
+        if getattr(player, 'reflect_cooldown', 0) > 0:
+            return False
+        if getattr(player, 'reflect_charges', 0) <= 0:
+            return False
+        if not projectile.get_rect().colliderect(player.get_rect()):
+            return False
+
+        original_parent = getattr(projectile, 'parent_list', None)
+        projectile.damage = max(projectile.damage, getattr(player, 'projectile_damage', projectile.damage))
+        projectile.dx = -projectile.dx
+        projectile.dy = -projectile.dy
+        projectile.color = getattr(player, 'color', projectile.color)
+        projectile.parent_list = player.projectiles
+        projectile.x = player.x + player.width // 2
+        projectile.y = player.y + player.height // 2
+        projectile.update_rect()
+        setattr(projectile, 'reflected', True)
+        player.projectiles.append(projectile)
+
+        if original_parent is not None and projectile in original_parent and original_parent is not player.projectiles:
+            original_parent.remove(projectile)
+
+        player.reflect_charges -= 1
+        player.reflect_cooldown = 18
+        return True
     
     def _populate_grid(self, players, bosses):
         """Populate spatial grid with all objects"""

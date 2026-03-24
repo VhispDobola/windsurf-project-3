@@ -42,27 +42,27 @@ class ThunderEmperor(Boss):
         if self.phase == 1:
             if self.storm_timer <= 0:
                 self.create_lightning_storm()
-                self.storm_timer = 150
+                self.storm_timer = 135
             if self.chain_lightning_timer <= 0:
                 self.create_electric_field()
-                self.chain_lightning_timer = 200
+                self.chain_lightning_timer = 180
                 
         elif self.phase == 2:
             if self.storm_timer <= 0:
                 self.create_chain_lightning()
-                self.storm_timer = 120
+                self.storm_timer = 102
             if self.chain_lightning_timer <= 0:
                 self.create_thunder_cloud()
-                self.chain_lightning_timer = 180
+                self.chain_lightning_timer = 155
             self.electric_aura = True
                 
         else:  # phase 3
             if self.storm_timer <= 0:
                 self.create_super_storm()
-                self.storm_timer = 90
+                self.storm_timer = 78
             if self.chain_lightning_timer <= 0:
                 self.create_lightning_matrix()
-                self.chain_lightning_timer = 150
+                self.chain_lightning_timer = 128
             self.electric_aura = True
             if self.thunder_charge <= 0:
                 self.create_thunder_charge()
@@ -77,7 +77,7 @@ class ThunderEmperor(Boss):
         
     def create_lightning_storm(self):
         # Create multiple lightning strikes
-        for i in range(3):
+        for i in range(4):
             strike_x = random.randint(100, WIDTH - 100)
             strike_y = random.randint(150, HEIGHT - 100)
             
@@ -140,8 +140,8 @@ class ThunderEmperor(Boss):
         
         self.electric_fields.append({
             'x': field_x, 'y': field_y,
-            'radius': 60, 'lifetime': 300,
-            'damage': 15, 'pulse_timer': 0
+            'radius': 70, 'lifetime': 320,
+            'damage': 16, 'pulse_timer': 0
         })
         self.effects.append(Telegraph(field_x, field_y, 60, 60, BLUE))
         
@@ -254,6 +254,17 @@ class ThunderEmperor(Boss):
         # Rotate safe lane slowly for readability
         if self.safe_lane_timer > 0:
             self.safe_lane_angle += 0.01
+
+        if self.electric_aura and self.game and self.game.player:
+            aura_rect = self.get_rect().inflate(120, 120)
+            if aura_rect.colliderect(self.game.player.get_rect()):
+                cooldown = getattr(self, 'aura_damage_cooldown', 0)
+                if cooldown <= 0:
+                    aura_damage = 6 if self.phase == 2 else 8
+                    self.game.player.take_damage(aura_damage)
+                    self.aura_damage_cooldown = 42 if self.phase == 2 else 34
+                else:
+                    self.aura_damage_cooldown = cooldown - 1
                                 
         # Update electric fields
         for field in self.electric_fields[:]:
@@ -299,20 +310,25 @@ class ThunderEmperor(Boss):
                     
                     self.lightning_strikes.append({
                         'x': strike_x, 'y': strike_y,
-                        'width': 20, 'height': 120,
-                        'lifetime': 20, 'damage': 18,
+                        'width': 24, 'height': 130,
+                        'lifetime': 22, 'damage': 20,
                         'charging': False
                     })
-                    cloud['strike_timer'] = 40
+                    cloud['strike_timer'] = 32
                     
     def draw(self, screen):
         # Draw electric fields
         for field in self.electric_fields:
-            alpha = field['lifetime'] / 300
+            alpha = max(0.0, min(1.0, field['lifetime'] / 300))
             pulse_alpha = 1.0 if field['pulse_timer'] > 20 else 0.5
-            
-            color = tuple(int(c * alpha * pulse_alpha) for c in (0, 150, 255))
-            pygame.draw.circle(screen, color, (field['x'], field['y']), field['radius'], 3)
+            color_scale = alpha * pulse_alpha
+            color = tuple(
+                max(0, min(255, int(c * color_scale)))
+                for c in (0, 150, 255)
+            )
+            center = (int(field['x']), int(field['y']))
+            radius = max(1, int(field['radius']))
+            pygame.draw.circle(screen, color, center, radius, 3)
             
             # Draw electric sparks
             for i in range(8):
@@ -323,10 +339,10 @@ class ThunderEmperor(Boss):
                 
         # Draw thunder clouds
         for cloud in self.thunder_clouds:
-            alpha = cloud['lifetime'] / 400
-            color = tuple(int(c * alpha) for c in (50, 50, 100))
+            alpha = max(0.0, min(1.0, cloud['lifetime'] / 400))
+            color = tuple(max(0, min(255, int(c * alpha))) for c in (50, 50, 100))
             pygame.draw.ellipse(screen, color, 
-                              (cloud['x'], cloud['y'], cloud['width'], cloud['height']))
+                              (int(cloud['x']), int(cloud['y']), int(cloud['width']), int(cloud['height'])))
             
         # Draw lightning strikes
         for strike in self.lightning_strikes:
@@ -407,6 +423,12 @@ class ThunderEmperor(Boss):
         else:
             # Fallback to default boss drawing
             Boss.draw(self, screen)
+
+        for effect in self.effects:
+            effect.draw(screen)
+
+        self.health_bar_color = CYAN
+        self.draw_health_bar(screen)
         
     def update_aura_particles(self):
         # Create electric aura particles

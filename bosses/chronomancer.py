@@ -213,16 +213,21 @@ class Chronomancer(BaseBoss):
             
             for i in range(16):
                 angle = (math.pi * 2 * i) / 16
-                dx = math.cos(angle) * 2
-                dy = math.sin(angle) * 2
+                spawn_radius = 70
+                spawn_x = player_x + math.cos(angle) * spawn_radius
+                spawn_y = player_y + math.sin(angle) * spawn_radius
+                dx = -math.cos(angle) * 3.2
+                dy = -math.sin(angle) * 3.2
                 bullet = Projectile(
-                    player_x, player_y,
-                    dx, dy, 5, (150, 150, 255), 4
+                    spawn_x, spawn_y,
+                    dx, dy, 7, (150, 150, 255), 5
                 )
                 bullet.freeze = True
+                bullet.freeze_ring = True
+                bullet.lifetime = 110
                 self.time_bullets.append(bullet)
                 
-            self.effects.append(Telegraph(player_x, player_y, 80, 80, (150, 150, 255)))
+            self.effects.append(Telegraph(player_x, player_y, 90, 90, (150, 150, 255)))
             
     def activate_time_stop(self):
         # Check if player is dashing - if so, cancel time stop

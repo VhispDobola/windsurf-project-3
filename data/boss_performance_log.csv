@@ -1,1 +1,2 @@
 boss,duration_s,damage_taken,player_damage_taken,attacks_landed,player_attacks_landed,phase_changes,special_abilities_used,phase_1_s,phase_2_s,phase_3_s,victory
+Cyber Overlord,21.01,552,132,10,138,1,0,10.46,10.54,0,False

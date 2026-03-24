@@ -1,7 +1,8 @@
+import os
+
 import pygame
 from config.constants import WHITE, YELLOW, GREEN, RED
 from .boss_title_animator import BossTitleAnimator
-from core.render_system import RenderSystem
 
 
 class UIManager:
@@ -12,6 +13,7 @@ class UIManager:
         self.font_small = self._get_font(22)
         self.font_tiny = self._get_font(18)
         self.boss_animator = BossTitleAnimator()
+        self._relic_icon_cache = {}
     
     def _get_font(self, size):
         """Get font from render system cache or create new one"""
@@ -30,6 +32,77 @@ class UIManager:
         pygame.draw.rect(screen, border_color, rect.inflate(6, 6), border_radius=16)
         pygame.draw.rect(screen, fill_color, rect, border_radius=14)
 
+    def _wrap_text(self, text, font, max_width):
+        words = (text or "").split()
+        if not words:
+            return []
+        lines = []
+        current = words[0]
+        for word in words[1:]:
+            trial = f"{current} {word}"
+            if font.size(trial)[0] <= max_width:
+                current = trial
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    def _get_relic_icon(self, relic, size):
+        icon_path = relic.get("icon_path")
+        abs_path = None
+        icon_mtime = None
+        if icon_path:
+            abs_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                icon_path.replace("/", os.sep),
+            )
+            if os.path.exists(abs_path):
+                try:
+                    icon_mtime = os.path.getmtime(abs_path)
+                except OSError:
+                    icon_mtime = None
+
+        icon_key = (relic.get("id"), size, abs_path, icon_mtime)
+        if icon_key in self._relic_icon_cache:
+            return self._relic_icon_cache[icon_key]
+
+        image = None
+        if abs_path and os.path.exists(abs_path):
+            try:
+                image = pygame.image.load(abs_path).convert_alpha()
+                image = pygame.transform.smoothscale(image, (size, size))
+            except pygame.error:
+                image = None
+
+        if image is None:
+            image = self._build_relic_icon_fallback(relic, size)
+
+        self._relic_icon_cache[icon_key] = image
+        return image
+
+    def _build_relic_icon_fallback(self, relic, size):
+        category = relic.get("category", "utility")
+        palette = {
+            "offense": ((70, 22, 28), (240, 90, 90), (255, 220, 220)),
+            "defense": ((20, 40, 62), (90, 220, 255), (220, 250, 255)),
+            "mobility": ((28, 50, 38), (110, 255, 170), (220, 255, 235)),
+            "utility": ((58, 46, 18), (255, 210, 90), (255, 248, 220)),
+        }
+        bg, accent, text_color = palette.get(category, palette["utility"])
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.rect(surf, bg, (0, 0, size, size), border_radius=12)
+        pygame.draw.rect(surf, accent, (0, 0, size, size), 2, border_radius=12)
+        glow = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*accent, 55), (size // 2, size // 2), max(10, size // 3))
+        surf.blit(glow, (0, 0))
+
+        initials = "".join(part[:1] for part in relic.get("name", "?").split()[:2]).upper() or "?"
+        font = self._get_font(max(16, size // 3))
+        label = font.render(initials, True, text_color)
+        surf.blit(label, label.get_rect(center=(size // 2, size // 2)))
+        return surf
+
     def draw_menu(self, screen):
         screen_width = screen.get_width()
         screen_height = screen.get_height()
@@ -37,6 +110,9 @@ class UIManager:
         self._draw_center_text(screen, "BOSS RUSH", self.font_large, screen_height // 3, WHITE)
         self._draw_center_text(screen, "Press SPACE to Start", self.font_medium, screen_height // 2, YELLOW)
         self._draw_center_text(screen, "Press C to Customize", self.font_small, screen_height // 2 + 36, GREEN)
+        self._draw_center_text(screen, "Press P for Progression", self.font_small, screen_height // 2 + 68, (120, 220, 255))
+        self._draw_center_text(screen, "Press H to Host Online Lobby", self.font_small, screen_height // 2 + 100, (140, 255, 180))
+        self._draw_center_text(screen, "Press J to Join Multiplayer", self.font_small, screen_height // 2 + 132, (150, 220, 255))
         
         controls = [
             "P1: WASD + LSHIFT + SPACE/Mouse",
@@ -44,16 +120,321 @@ class UIManager:
             "F11: Toggle Fullscreen"
         ]
         
-        y = int(screen_height * 0.586)
+        y = int(screen_height * 0.64)
         for control in controls:
             text = self.font_small.render(control, True, WHITE)
             text_rect = text.get_rect(center=(screen_width // 2, y))
             screen.blit(text, text_rect)
             y += 30
 
-    def draw_customization(self, screen, players, selected_player, selected_field, color_options, hat_options):
+    def draw_join_setup(self, screen, host, port, slot_label, selected_field, status_message=None):
         screen_w = screen.get_width()
         screen_h = screen.get_height()
+        self._draw_center_text(screen, "JOIN MULTIPLAYER", self.font_large, 70, YELLOW)
+        self._draw_center_text(
+            screen,
+            "Tab/Up/Down: Move  |  Type to edit  |  Left/Right: Change slot  |  Enter: Connect  |  Esc: Back",
+            self.font_tiny,
+            104,
+            WHITE,
+        )
+
+        panel = pygame.Rect(screen_w // 2 - 280, 150, 560, 280)
+        self._draw_panel(screen, panel, (20, 22, 28), (110, 130, 180))
+        field_colors = [WHITE, WHITE, WHITE]
+        if 0 <= selected_field < len(field_colors):
+            field_colors[selected_field] = YELLOW
+
+        host_text = self.font_small.render(f"Host IP: {host}", True, field_colors[0])
+        port_text = self.font_small.render(f"Port: {port}", True, field_colors[1])
+        slot_text = self.font_small.render(f"Slot: {slot_label}", True, field_colors[2])
+        screen.blit(host_text, (panel.x + 40, panel.y + 60))
+        screen.blit(port_text, (panel.x + 40, panel.y + 120))
+        screen.blit(slot_text, (panel.x + 40, panel.y + 180))
+
+        help_lines = [
+            "Examples: 127.0.0.1, 192.168.1.20, or a Tailscale/ZeroTier IP",
+            "Use Auto slot unless you need a fixed player number.",
+        ]
+        for idx, line in enumerate(help_lines):
+            self._draw_center_text(screen, line, self.font_tiny, panel.y + 230 + idx * 22, (190, 205, 220))
+
+        if status_message:
+            self._draw_center_text(screen, status_message, self.font_small, screen_h - 40, GREEN if "Launching" in status_message else RED)
+
+    def _draw_hat_icon(self, screen, rect, hat_style):
+        hat = (hat_style or "None").lower()
+        if hat == "none":
+            return
+        if hat == "cap":
+            pygame.draw.ellipse(screen, (30, 30, 30), (rect.x + 6, rect.y - 6, rect.width - 12, 6))
+            pygame.draw.rect(screen, (220, 70, 70), (rect.x + 8, rect.y - 11, rect.width - 16, 7), border_radius=3)
+        elif hat == "crown":
+            points = [
+                (rect.x + 8, rect.y + 2),
+                (rect.x + 12, rect.y - 8),
+                (rect.centerx, rect.y - 1),
+                (rect.right - 12, rect.y - 8),
+                (rect.right - 8, rect.y + 2),
+            ]
+            pygame.draw.polygon(screen, (240, 200, 70), points)
+            pygame.draw.rect(screen, (200, 160, 50), (rect.x + 8, rect.y + 1, rect.width - 16, 3))
+        elif hat == "beanie":
+            pygame.draw.ellipse(screen, (80, 180, 255), (rect.x + 5, rect.y - 8, rect.width - 10, 10))
+            pygame.draw.circle(screen, (240, 240, 240), (rect.centerx, rect.y - 8), 3)
+
+    def _draw_avatar_card(
+        self,
+        screen,
+        rect,
+        username,
+        color,
+        hat_style,
+        status_text,
+        status_color,
+        ping_text=None,
+        selected=False,
+    ):
+        border = YELLOW if selected else (100, 100, 120)
+        self._draw_panel(screen, rect, (24, 26, 34), border)
+        preview = pygame.Rect(rect.x + 18, rect.y + 24, 46, 46)
+        pygame.draw.rect(screen, (0, 0, 0), preview.inflate(10, 10), border_radius=10)
+        pygame.draw.rect(screen, color, preview, border_radius=8)
+        self._draw_hat_icon(screen, preview, hat_style)
+
+        name = self.font_small.render(username, True, WHITE)
+        screen.blit(name, (rect.x + 84, rect.y + 18))
+        status = self.font_tiny.render(status_text, True, status_color)
+        screen.blit(status, (rect.x + 84, rect.y + 46))
+        hat = self.font_tiny.render(f"Hat: {hat_style}", True, (190, 205, 220))
+        screen.blit(hat, (rect.x + 84, rect.y + 68))
+        if ping_text:
+            ping = self.font_tiny.render(ping_text, True, (150, 220, 255))
+            screen.blit(ping, (rect.right - ping.get_width() - 14, rect.y + 18))
+
+    def draw_lobby(self, screen, lobby_slots, local_slot, host_address=None, can_start=False, host_mode=False):
+        screen_w = screen.get_width()
+        screen_h = screen.get_height()
+        self._draw_center_text(screen, "ONLINE LOBBY", self.font_large, 60, YELLOW)
+        subtitle = "SPACE: Start match | C: Customize | P: Armory" if host_mode else "ENTER: Ready up"
+        self._draw_center_text(screen, subtitle, self.font_tiny, 98, WHITE)
+        if host_address:
+            self._draw_center_text(screen, f"Join address: {host_address}", self.font_tiny, 124, (150, 220, 255))
+
+        start_y = 170
+        card_h = 102
+        gap = 14
+        card_w = min(620, screen_w - 120)
+        start_x = (screen_w - card_w) // 2
+
+        for index, slot in enumerate(lobby_slots):
+            rect = pygame.Rect(start_x, start_y + index * (card_h + gap), card_w, card_h)
+            profile = slot.get("profile", {})
+            self._draw_avatar_card(
+                screen,
+                rect,
+                profile.get("username", f"P{slot.get('slot', index + 1)}"),
+                tuple(profile.get("color", (0, 100, 255))),
+                profile.get("hat", "None"),
+                slot.get("status", "Open Slot"),
+                slot.get("status_color", (180, 180, 190)),
+                ping_text=slot.get("ping_text"),
+                selected=slot.get("slot") == local_slot,
+            )
+
+        footer = "All connected players are ready." if can_start else "Waiting for players to join and ready up."
+        footer_color = GREEN if can_start else (210, 210, 220)
+        self._draw_center_text(screen, footer, self.font_small, screen_h - 40, footer_color)
+
+    def draw_progression_menu(
+        self,
+        screen,
+        progression_system,
+        selected_relic_index,
+        selected_slot_index,
+        focus_area,
+        status_message=None,
+    ):
+        screen_w = screen.get_width()
+        screen_h = screen.get_height()
+        relics = progression_system.get_visible_relics()
+        profile = progression_system.profile
+
+        self._draw_center_text(screen, "ARMORY", self.font_large, 50, YELLOW)
+        self._draw_center_text(
+            screen,
+            "P/Esc: Back  |  Up/Down: Move  |  Left/Right: Focus  |  1-4: Equip  |  C: Craft  |  U: Upgrade  |  Backspace: Unequip",
+            self.font_tiny,
+            84,
+            WHITE,
+        )
+
+        currency_rect = pygame.Rect(24, 120, 240, screen_h - 190)
+        inventory_rect = pygame.Rect(284, 120, 430, screen_h - 190)
+        loadout_rect = pygame.Rect(screen_w - 262, 120, 238, screen_h - 190)
+
+        self._draw_panel(screen, currency_rect, (20, 24, 32), (80, 120, 150))
+        self._draw_panel(
+            screen,
+            inventory_rect,
+            (20, 20, 28),
+            (220, 200, 90) if focus_area == "inventory" else (100, 100, 130),
+        )
+        self._draw_panel(
+            screen,
+            loadout_rect,
+            (24, 20, 30),
+            (220, 200, 90) if focus_area == "loadout" else (100, 100, 130),
+        )
+
+        self.draw_currency_summary(screen, currency_rect, profile)
+        self.draw_relic_inventory(
+            screen,
+            inventory_rect,
+            progression_system,
+            relics,
+            selected_relic_index,
+        )
+        self.draw_loadout_panel(
+            screen,
+            loadout_rect,
+            progression_system,
+            selected_slot_index,
+        )
+
+        if status_message:
+            self._draw_center_text(screen, status_message, self.font_small, screen_h - 30, GREEN)
+
+    def draw_currency_summary(self, screen, rect, profile):
+        title = self.font_medium.render("Resources", True, YELLOW)
+        screen.blit(title, (rect.x + 14, rect.y + 12))
+
+        credits = int(profile.get("currencies", {}).get("credits", 0))
+        credits_text = self.font_small.render(f"Credits: {credits}", True, WHITE)
+        screen.blit(credits_text, (rect.x + 14, rect.y + 56))
+
+        materials = profile.get("materials", {})
+        materials_title = self.font_small.render("Boss Essence", True, (150, 210, 255))
+        screen.blit(materials_title, (rect.x + 14, rect.y + 96))
+
+        sorted_materials = sorted(materials.items(), key=lambda item: item[0])
+        if not sorted_materials:
+            empty = self.font_tiny.render("No essence collected yet.", True, (170, 170, 190))
+            screen.blit(empty, (rect.x + 14, rect.y + 126))
+            return
+
+        y = rect.y + 126
+        for material_key, amount in sorted_materials[:16]:
+            label = material_key.replace("_", " ").title()
+            text = self.font_tiny.render(f"{label}: {amount}", True, WHITE)
+            screen.blit(text, (rect.x + 14, y))
+            y += 22
+
+    def draw_relic_inventory(self, screen, rect, progression_system, relics, selected_relic_index):
+        title = self.font_medium.render("Relics", True, WHITE)
+        screen.blit(title, (rect.x + 14, rect.y + 12))
+
+        if not relics:
+            empty = self.font_small.render("No unlocked relics are visible yet.", True, RED)
+            screen.blit(empty, (rect.x + 14, rect.y + 56))
+            return
+
+        selected_relic_index = max(0, min(selected_relic_index, len(relics) - 1))
+        y = rect.y + 52
+        card_h = 124
+        visible_count = max(1, (rect.height - 70) // (card_h + 8))
+        start = min(max(0, selected_relic_index - visible_count // 2), max(0, len(relics) - visible_count))
+
+        for offset, relic in enumerate(relics[start : start + visible_count]):
+            index = start + offset
+            card = pygame.Rect(rect.x + 12, y + offset * (card_h + 8), rect.width - 24, card_h)
+            entry = progression_system.get_relic_entry(relic["id"])
+            owned = entry.get("owned", False)
+            craftable = progression_system.can_craft_relic(relic["id"])
+            upgradable = progression_system.can_upgrade_relic(relic["id"])
+
+            fill = (42, 56, 68) if owned else (34, 30, 38)
+            border = (255, 220, 110) if index == selected_relic_index else (100, 100, 120)
+            pygame.draw.rect(screen, fill, card, border_radius=10)
+            pygame.draw.rect(screen, border, card, 2, border_radius=10)
+
+            icon = self._get_relic_icon(relic, 56)
+            screen.blit(icon, (card.x + 10, card.y + 20))
+
+            status = "Owned" if owned else "Craftable" if craftable else "Locked"
+            if owned and upgradable:
+                status = "Upgradeable"
+            name = self.font_small.render(relic["name"], True, WHITE)
+            screen.blit(name, (card.x + 78, card.y + 10))
+
+            meta = self.font_tiny.render(
+                f"{relic.get('category', 'relic').title()} | Rank {entry.get('rank', 0)}/{relic.get('max_rank', 1)} | {status}",
+                True,
+                (190, 210, 230),
+            )
+            screen.blit(meta, (card.x + 78, card.y + 34))
+
+            text_width = card.width - 92
+            desc_lines = self._wrap_text(relic.get("ui_desc", ""), self.font_tiny, text_width)
+            for line_idx, line in enumerate(desc_lines[:2]):
+                desc = self.font_tiny.render(line, True, (220, 220, 230))
+                screen.blit(desc, (card.x + 78, card.y + 56 + line_idx * 16))
+
+            appearance_lines = self._wrap_text(
+                relic.get("appearance", ""),
+                self.font_tiny,
+                text_width,
+            )
+            for line_idx, line in enumerate(appearance_lines[:2]):
+                appearance = self.font_tiny.render(line, True, (170, 185, 205))
+                screen.blit(appearance, (card.x + 78, card.y + 88 + line_idx * 16))
+
+    def draw_loadout_panel(self, screen, rect, progression_system, selected_slot_index):
+        title = self.font_medium.render("Loadout", True, WHITE)
+        screen.blit(title, (rect.x + 14, rect.y + 12))
+
+        loadout = progression_system.get_equipped_relics()
+        y = rect.y + 58
+        for i, relic_id in enumerate(loadout):
+            slot_rect = pygame.Rect(rect.x + 16, y + i * 76, rect.width - 32, 62)
+            border = YELLOW if i == selected_slot_index else (100, 100, 120)
+            pygame.draw.rect(screen, (34, 34, 42), slot_rect, border_radius=10)
+            pygame.draw.rect(screen, border, slot_rect, 2, border_radius=10)
+            icon_rect = pygame.Rect(slot_rect.x + 8, slot_rect.y + 7, 48, 48)
+            label = self.font_small.render(f"Slot {i + 1}", True, WHITE)
+            screen.blit(label, (slot_rect.x + 64, slot_rect.y + 8))
+            if relic_id:
+                relic = progression_system.relic_definitions.get(relic_id, {})
+                entry = progression_system.get_relic_entry(relic_id)
+                icon = self._get_relic_icon(relic, 48)
+                screen.blit(icon, icon_rect.topleft)
+                name = self.font_tiny.render(
+                    f"{relic.get('name', relic_id)} (R{entry.get('rank', 1)})",
+                    True,
+                    (180, 225, 255),
+                )
+            else:
+                placeholder = self._build_relic_icon_fallback({"name": "Empty", "category": "utility"}, 48)
+                screen.blit(placeholder, icon_rect.topleft)
+                name = self.font_tiny.render("Empty", True, (160, 160, 180))
+            screen.blit(name, (slot_rect.x + 64, slot_rect.y + 34))
+
+    def draw_reward_toasts(self, screen, reward_toasts):
+        if not reward_toasts:
+            return
+
+        y = 18
+        for toast in reward_toasts[:5]:
+            alpha = max(60, min(255, int(255 * (toast.get("timer", 1) / max(1, toast.get("duration", 1))))))
+            surf = pygame.Surface((420, 30), pygame.SRCALPHA)
+            pygame.draw.rect(surf, (15, 18, 24, alpha), surf.get_rect(), border_radius=10)
+            text = self.font_tiny.render(toast.get("text", ""), True, toast.get("color", YELLOW))
+            surf.blit(text, (10, 7))
+            screen.blit(surf, (screen.get_width() - 440, y))
+            y += 36
+
+    def draw_customization(self, screen, players, selected_player, selected_field, color_options, hat_options):
+        screen_w = screen.get_width()
 
         self._draw_center_text(screen, "CUSTOMIZATION", self.font_large, 70, YELLOW)
         self._draw_center_text(screen, "TAB: Switch Player  |  Arrows: Edit  |  Enter/Esc: Back", self.font_tiny, 104, WHITE)
@@ -183,13 +564,19 @@ class UIManager:
             name_rect = name_surf.get_rect(center=(x + bar_width // 2, bar_y - 10))
             screen.blit(name_surf, name_rect)
             
-            # Health bar background
-            pygame.draw.rect(screen, RED, (x, bar_y, bar_width, bar_height))
+            # Health bar background and border stay readable across all boss colors.
+            background_rect = pygame.Rect(x, bar_y, bar_width, bar_height)
+            pygame.draw.rect(screen, (45, 10, 10), background_rect)
+            pygame.draw.rect(screen, WHITE, background_rect, 1)
             
             # Health fill
-            health_percentage = max(0, boss.health / boss.max_health)
+            max_health = max(1, boss.max_health)
+            health_percentage = max(0.0, min(1.0, boss.health / max_health))
             health_color = getattr(boss, 'health_bar_color', GREEN)
-            pygame.draw.rect(screen, health_color, (x, bar_y, bar_width * health_percentage, bar_height))
+            fill_width = int(bar_width * health_percentage)
+            if boss.health > 0 and fill_width <= 0:
+                fill_width = 1
+            pygame.draw.rect(screen, health_color, (x, bar_y, fill_width, bar_height))
 
             # Phase markers
             marker_color = (30, 30, 30)
@@ -229,7 +616,7 @@ class UIManager:
         restart_rect = restart.get_rect(center=(screen_width // 2, screen_height // 2 + 60))
         screen.blit(restart, restart_rect)
 
-    def draw_upgrade_screen(self, screen, upgrades, hovered_index=-1):
+    def draw_upgrade_screen(self, screen, upgrades, hovered_index=-1, title="CHOOSE UPGRADE", subtitle="Press 1-4 or Click to pick"):
         screen_width = screen.get_width()
         screen_height = screen.get_height()
         
@@ -237,8 +624,8 @@ class UIManager:
         overlay.fill((0, 0, 0, 140))
         screen.blit(overlay, (0, 0))
 
-        self._draw_center_text(screen, "CHOOSE UPGRADE", self.font_large, screen_height // 6, YELLOW)
-        self._draw_center_text(screen, "Press 1-4 or Click to pick", self.font_small, screen_height // 6 + 42, WHITE)
+        self._draw_center_text(screen, title, self.font_large, screen_height // 6, YELLOW)
+        self._draw_center_text(screen, subtitle, self.font_small, screen_height // 6 + 42, WHITE)
 
         cards = upgrades[:4]
         card_w = 240

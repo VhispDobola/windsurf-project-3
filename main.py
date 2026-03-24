@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import socket
 import time
 from datetime import datetime
 
@@ -18,7 +19,7 @@ from config.constants import (
     WIDTH,
     init_pygame,
 )
-from core import ArenaRenderer, BossManager, Player
+from core import ArenaRenderer, BossManager, Player, ProgressionSystem
 from core.audio_manager import AudioManager
 from core.auto_balance import AutoBalanceSystem
 from core.collision_system import CollisionSystem
@@ -85,6 +86,7 @@ class Game:
         self.performance_logger = PerformanceLogger()
         self.collision_system = CollisionSystem(self.performance_logger, WIDTH, HEIGHT)
         self.upgrade_system = UpgradeSystem()
+        self.progression_system = ProgressionSystem()
         self.render_system = RenderSystem(WIDTH, HEIGHT)
         self.screen_shake = ScreenShakeEffect()
         self.audio_manager = AudioManager()
@@ -92,7 +94,7 @@ class Game:
         self.audio_manager.register_custom_sound("blade_dash", "blade_dash.mp3")
         self.audio_manager.register_custom_sound("time_stop", "timestop.mp3")
         self.damage_numbers = DamageNumberManager()
-        self.state_manager.change_state(GameState.MENU)
+        self.state_manager.change_state(self._default_frontend_state())
         self.color_options = [
             (0, 100, 255),  # blue
             (0, 220, 180),  # teal
@@ -105,6 +107,20 @@ class Game:
         self.player_customizations = []
         self.customization_player_index = 0
         self.customization_field_index = 0
+        self.progression_selected_relic_index = 0
+        self.progression_selected_slot_index = 0
+        self.progression_focus_area = "inventory"
+        self.progression_status_message = ""
+        self.progression_status_timer = 0
+        self.join_menu_host = "127.0.0.1"
+        self.join_menu_port = "50000"
+        self.join_menu_slot_options = ["auto", "2", "3", "4"]
+        self.join_menu_slot_index = 0
+        self.join_menu_field_index = 0
+        self.join_menu_status = ""
+        self.launch_network_client_after_exit = False
+        self.reward_toasts = []
+        self.run_in_progress = False
         self.players = []
         self.player = None
         self.control_profiles = self._build_player_control_profiles()
@@ -127,6 +143,7 @@ class Game:
 
         self.pending_upgrades = []
         self.pending_between_round_heal = False
+        self.milestone_upgrade_round = False
         self.bottom_camp_frames = {}
         self.pressure_cooldown = 0
         self.last_player_pos = {}
@@ -175,22 +192,7 @@ class Game:
         }
 
         if self.network_mode == "host":
-            self.network_host = NetworkHost(
-                self.network_host_ip,
-                self.network_port,
-                max_remote_players=3,
-                stream_fps=self.network_stream_fps,
-                sync_mode=self.network_sync_mode,
-                zlib_level=self.network_zlib_level,
-            )
-            self.network_host.start()
-            self.error_handler.logger.info(
-                "LAN host mode enabled on %s:%s (sync=%s, fps=%s)",
-                self.network_host_ip,
-                self.network_port,
-                self.network_sync_mode,
-                self.network_stream_fps,
-            )
+            self._start_network_host()
 
     def _init_players(self):
         """Initialize local multiplayer roster and per-player input profiles."""
@@ -216,6 +218,46 @@ class Game:
         self.player = self.players[0]
         self._prime_player_tracking()
 
+    def _start_network_host(self):
+        if self.network_host:
+            return True
+        self.network_host = NetworkHost(
+            self.network_host_ip,
+            self.network_port,
+            max_remote_players=3,
+            stream_fps=self.network_stream_fps,
+            sync_mode=self.network_sync_mode,
+            zlib_level=self.network_zlib_level,
+        )
+        try:
+            self.network_host.start()
+        except OSError as exc:
+            self.error_handler.logger.error(
+                "Unable to start LAN host on %s:%s: %s",
+                self.network_host_ip,
+                self.network_port,
+                exc,
+            )
+            self.network_host = None
+            self.network_mode = "off"
+            return False
+
+        self.error_handler.logger.info(
+            "LAN host mode enabled on %s:%s (sync=%s, fps=%s)",
+            self.network_host_ip,
+            self.network_port,
+            self.network_sync_mode,
+            self.network_stream_fps,
+        )
+        return True
+
+    def open_host_lobby(self):
+        self.network_mode = "host"
+        if not self._start_network_host():
+            self.state = GameState.MENU
+            return
+        self.state = GameState.LOBBY
+
     def _create_player(self, player_index):
         center_x = WIDTH // 2 - 15
         base_y = HEIGHT - 100
@@ -228,14 +270,287 @@ class Game:
         player._game_ref = self
         player.player_index = player_index
         player.input_profile = self.control_profiles[player_index]
+        self._apply_progression_to_player(player)
         self._apply_customization_to_player(player, player_index)
         return player
 
     def _default_customization(self, index):
-        return default_customization(self, index)
+        profile = default_customization(self, index)
+        if index == 0:
+            identity = self.progression_system.get_player_identity()
+            profile["username"] = identity.get("username", profile["username"])
+            profile["color"] = tuple(identity.get("color", profile["color"]))
+            profile["hat"] = identity.get("hat", profile["hat"])
+        return profile
 
     def _apply_customization_to_player(self, player, player_index):
         return apply_customization_to_player(self, player, player_index)
+
+    def _apply_progression_to_player(self, player):
+        self.progression_system.apply_meta_bonuses_to_player(player)
+
+    def _show_status_message(self, text, duration=180):
+        self.progression_status_message = text
+        self.progression_status_timer = duration
+
+    def _queue_reward_toast(self, text, color=(255, 255, 0), duration=240):
+        self.reward_toasts.append(
+            {"text": text, "color": color, "timer": duration, "duration": duration}
+        )
+
+    def _queue_reward_summary(self, rewards):
+        credits = int(rewards.get("credits", 0))
+        if credits:
+            self._queue_reward_toast(f"+{credits} Credits", (255, 230, 120))
+        for boss_id, amount in rewards.get("materials", {}).items():
+            label = boss_id.replace("_", " ").title()
+            self._queue_reward_toast(f"+{amount} {label} Essence", (140, 220, 255))
+        if rewards.get("first_time"):
+            self._queue_reward_toast(
+                f"First kill bonus: {rewards.get('boss_name', 'Boss')}",
+                (140, 255, 170),
+            )
+
+    def _get_progression_relics(self):
+        return self.progression_system.get_visible_relics()
+
+    def _default_frontend_state(self):
+        if self.network_mode == "host":
+            return GameState.LOBBY
+        return GameState.MENU
+
+    def _build_local_lobby_profile(self):
+        if self.player_customizations:
+            profile = self.player_customizations[0]
+        else:
+            profile = self._default_customization(0)
+        return {
+            "username": str(profile.get("username", "Player")).strip()[:16] or "Player",
+            "color": list(profile.get("color", (0, 100, 255))),
+            "hat": str(profile.get("hat", "None")).strip() or "None",
+        }
+
+    def get_display_host_address(self):
+        if self.network_mode != "host":
+            return None
+        if self.network_host_ip and self.network_host_ip not in ("0.0.0.0", "::"):
+            return f"{self.network_host_ip}:{self.network_port}"
+        ip_candidates = []
+        try:
+            addresses = socket.gethostbyname_ex(socket.gethostname())[2]
+            ip_candidates = [
+                ip for ip in addresses if ip and "." in ip and not ip.startswith("127.")
+            ]
+        except OSError:
+            ip_candidates = []
+        if not ip_candidates:
+            return f"Share your PC's LAN IP on port {self.network_port}"
+        return " | ".join(f"{ip}:{self.network_port}" for ip in sorted(set(ip_candidates)))
+
+    def get_join_slot_label(self):
+        value = self.join_menu_slot_options[self.join_menu_slot_index]
+        return "Auto" if value == "auto" else f"Player {value}"
+
+    def open_join_menu(self):
+        self.join_menu_status = ""
+        self.state = GameState.JOIN_SETUP
+
+    def launch_network_client_from_menu(self):
+        host = self.join_menu_host.strip()
+        port = self.join_menu_port.strip()
+        if not host:
+            self.join_menu_status = "Host IP is required."
+            return
+        try:
+            parsed_port = int(port)
+            if parsed_port <= 0 or parsed_port > 65535:
+                raise ValueError
+        except ValueError:
+            self.join_menu_status = "Port must be a number from 1 to 65535."
+            return
+
+        os.environ["BOSS_RUSH_NETWORK_MODE"] = "client"
+        os.environ["BOSS_RUSH_HOST"] = host
+        os.environ["BOSS_RUSH_PORT"] = str(parsed_port)
+        os.environ["BOSS_RUSH_PLAYER_SLOT"] = self.join_menu_slot_options[self.join_menu_slot_index]
+        self.launch_network_client_after_exit = True
+        self.join_menu_status = "Launching client..."
+        self.running = False
+
+    def _handle_join_menu_key(self, event):
+        if event.key == pygame.K_ESCAPE:
+            self.join_menu_status = ""
+            self.state = GameState.MENU
+            return
+        if event.key in (pygame.K_TAB, pygame.K_DOWN):
+            self.join_menu_field_index = (self.join_menu_field_index + 1) % 3
+            return
+        if event.key == pygame.K_UP:
+            self.join_menu_field_index = (self.join_menu_field_index - 1) % 3
+            return
+        if event.key == pygame.K_RETURN:
+            self.launch_network_client_from_menu()
+            return
+
+        if self.join_menu_field_index == 2:
+            if event.key == pygame.K_LEFT:
+                self.join_menu_slot_index = (self.join_menu_slot_index - 1) % len(self.join_menu_slot_options)
+            elif event.key == pygame.K_RIGHT:
+                self.join_menu_slot_index = (self.join_menu_slot_index + 1) % len(self.join_menu_slot_options)
+            return
+
+        if event.key == pygame.K_BACKSPACE:
+            if self.join_menu_field_index == 0:
+                self.join_menu_host = self.join_menu_host[:-1]
+            elif self.join_menu_field_index == 1:
+                self.join_menu_port = self.join_menu_port[:-1]
+            return
+
+        if self.join_menu_field_index == 0:
+            if event.unicode and (event.unicode.isalnum() or event.unicode in ".:-"):
+                self.join_menu_host = (self.join_menu_host + event.unicode)[:64]
+            return
+
+        if self.join_menu_field_index == 1:
+            if event.unicode and event.unicode.isdigit():
+                self.join_menu_port = (self.join_menu_port + event.unicode)[:5]
+
+    def get_lobby_slots(self):
+        slots = [
+            {
+                "slot": 1,
+                "connected": True,
+                "ready": True,
+                "profile": self._build_local_lobby_profile(),
+                "status": "Host",
+                "status_color": (140, 255, 180),
+                "ping_text": None,
+            }
+        ]
+        remote_lobby = self.network_host.get_lobby_state() if self.network_host else {}
+        for idx in range(1, 4):
+            entry = remote_lobby.get(idx)
+            if entry:
+                ready = bool(entry.get("ready", False))
+                slots.append(
+                    {
+                        "slot": idx + 1,
+                        "connected": True,
+                        "ready": ready,
+                        "profile": dict(entry.get("profile", {})),
+                        "status": "Ready" if ready else "Waiting",
+                        "status_color": (140, 255, 180) if ready else (255, 220, 120),
+                        "ping_text": f"{int(entry.get('ping_ms', 0))} ms",
+                    }
+                )
+            else:
+                slots.append(
+                    {
+                        "slot": idx + 1,
+                        "connected": False,
+                        "ready": False,
+                        "profile": {
+                            "username": f"Open Slot {idx + 1}",
+                            "color": [70, 70, 90],
+                            "hat": "None",
+                        },
+                        "status": "Open Slot",
+                        "status_color": (170, 170, 190),
+                        "ping_text": None,
+                    }
+                )
+        return slots
+
+    def can_start_from_lobby(self):
+        if self.network_mode != "host" or not self.network_host:
+            return True
+        return self.network_host.all_connected_ready()
+
+    def _move_progression_selection(self, direction):
+        if self.progression_focus_area == "inventory":
+            relics = self._get_progression_relics()
+            if relics:
+                self.progression_selected_relic_index = max(
+                    0,
+                    min(
+                        len(relics) - 1,
+                        self.progression_selected_relic_index + direction,
+                    ),
+                )
+        else:
+            self.progression_selected_slot_index = max(
+                0,
+                min(
+                    self.progression_system.DEFAULT_LOADOUT_SIZE - 1,
+                    self.progression_selected_slot_index + direction,
+                ),
+            )
+
+    def _selected_relic_id(self):
+        relics = self._get_progression_relics()
+        if not relics:
+            return None
+        index = max(0, min(self.progression_selected_relic_index, len(relics) - 1))
+        return relics[index]["id"]
+
+    def _handle_progression_key(self, event):
+        if event.key in (pygame.K_ESCAPE, pygame.K_p):
+            self.state = self._default_frontend_state()
+            self._show_status_message("", duration=0)
+            return
+        if event.key == pygame.K_UP:
+            self._move_progression_selection(-1)
+            return
+        if event.key == pygame.K_DOWN:
+            self._move_progression_selection(1)
+            return
+        if event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+            self.progression_focus_area = (
+                "loadout" if self.progression_focus_area == "inventory" else "inventory"
+            )
+            return
+
+        if self.progression_focus_area == "loadout":
+            if event.key == pygame.K_BACKSPACE:
+                self.progression_system.unequip_relic(self.progression_selected_slot_index)
+                self._show_status_message(
+                    f"Cleared slot {self.progression_selected_slot_index + 1}."
+                )
+            return
+
+        relic_id = self._selected_relic_id()
+        if not relic_id:
+            return
+        relic = self.progression_system.relic_definitions.get(relic_id, {})
+
+        if event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
+            slot_index = event.key - pygame.K_1
+            if self.progression_system.equip_relic(relic_id, slot_index):
+                self.progression_selected_slot_index = slot_index
+                self._show_status_message(
+                    f"Equipped {relic.get('name', relic_id)} to slot {slot_index + 1}."
+                )
+            else:
+                self._show_status_message("Equip failed. Own the relic and avoid duplicates.")
+            return
+        if event.key == pygame.K_c:
+            if self.progression_system.craft_relic(relic_id):
+                self._show_status_message(f"Crafted {relic.get('name', relic_id)}.")
+                self._queue_reward_toast(
+                    f"Unlocked: {relic.get('name', relic_id)}",
+                    (140, 255, 180),
+                )
+            else:
+                self._show_status_message("Not enough credits/essence to craft.")
+            return
+        if event.key == pygame.K_u:
+            if self.progression_system.upgrade_relic(relic_id):
+                entry = self.progression_system.get_relic_entry(relic_id)
+                self._show_status_message(
+                    f"Upgraded {relic.get('name', relic_id)} to rank {entry.get('rank', 1)}."
+                )
+            else:
+                self._show_status_message("Upgrade unavailable or unaffordable.")
 
     def _build_player_control_profiles(self):
         return [
@@ -293,15 +608,26 @@ class Game:
         connected_remote = [idx for idx in connected_remote if 1 <= idx <= 3]
         desired_indices = [0] + connected_remote
         current_indices = sorted(player.player_index for player in self.players)
-        if current_indices == sorted(desired_indices):
-            return
+        if current_indices != sorted(desired_indices):
+            current_by_index = {player.player_index: player for player in self.players}
+            for idx in desired_indices:
+                if idx not in current_by_index:
+                    current_by_index[idx] = self._create_player(idx)
 
-        current_by_index = {player.player_index: player for player in self.players}
-        for idx in desired_indices:
-            if idx not in current_by_index:
-                current_by_index[idx] = self._create_player(idx)
-
-        self.players = [current_by_index[idx] for idx in sorted(desired_indices)]
+            self.players = [current_by_index[idx] for idx in sorted(desired_indices)]
+        lobby_state = self.network_host.get_lobby_state()
+        for player in self.players:
+            if player.player_index <= 0:
+                continue
+            info = lobby_state.get(player.player_index, {})
+            profile = info.get("profile", {})
+            if not profile:
+                continue
+            player.username = profile.get(
+                "username", player.username or f"P{player.player_index + 1}"
+            )
+            player.color = tuple(profile.get("color", player.color))
+            player.hat_style = profile.get("hat", player.hat_style or "None")
         self.player = next(
             (p for p in self.players if p.player_index == 0), self.players[0]
         )
@@ -399,6 +725,8 @@ class Game:
             "score": int(self.score),
             "players": players,
             "bosses": bosses,
+            "lobby": self.get_lobby_slots() if self.network_mode == "host" else [],
+            "host_address": self.get_display_host_address(),
         }
 
     def _record_replay_frame(self):
@@ -515,8 +843,9 @@ class Game:
 
     def reset_game(self):
         """Reset game for a new run"""
-        self.state = GameState.MENU
+        self.state = self._default_frontend_state()
         self.audio_manager.stop_music()
+        self.run_in_progress = False
         self._init_players()
         self.current_boss = None
         self.current_bosses = []
@@ -530,6 +859,7 @@ class Game:
         self.hovered_upgrade_index = -1
         self.pending_upgrades = []  # Clear any pending upgrades
         self.pending_between_round_heal = False
+        self.milestone_upgrade_round = False
         self.bottom_camp_frames = {}
         self.pressure_cooldown = 0
         self.last_player_pos = {}
@@ -538,8 +868,14 @@ class Game:
         self.collision_system = CollisionSystem(self.performance_logger, WIDTH, HEIGHT)
         self.render_system.clear_batches()
         self.damage_numbers.clear()
+        self.progression_status_message = ""
+        self.progression_status_timer = 0
 
     def start_boss_fight(self):
+        if not self.run_in_progress:
+            self.run_in_progress = True
+            self.progression_system.record_run_started()
+
         # Check if we should have single or paired bosses
         if self.boss_manager.bosses_defeated_count < 10:
             # Single boss fight
@@ -554,6 +890,7 @@ class Game:
                 if adjustments:
                     boss.apply_balance_adjustments(adjustments)
                     self.auto_balance.log_balance_change(boss.name, adjustments)
+                self.boss_manager.apply_player_progression_scaling(boss, self.players)
 
                 self.state = GameState.BOSS_INTRO
                 self.intro_timer = BOSS_INTRO_DURATION
@@ -573,6 +910,12 @@ class Game:
                 self.performance_logger.start_boss_fight(boss.name)
             else:
                 self.state = GameState.VICTORY
+                reward = self.progression_system.grant_run_victory_bonus()
+                self._queue_reward_toast(
+                    f"Victory bonus: +{reward.get('credits', 0)} Credits",
+                    (140, 255, 180),
+                )
+                self.run_in_progress = False
         else:
             # Paired boss fight
             boss1, boss2 = self.boss_manager.get_next_boss_pair()
@@ -591,6 +934,7 @@ class Game:
                     if adjustments:
                         boss.apply_balance_adjustments(adjustments)
                         self.auto_balance.log_balance_change(boss.name, adjustments)
+                    self.boss_manager.apply_player_progression_scaling(boss, self.players)
 
                 self.state = GameState.BOSS_INTRO
                 self.intro_timer = BOSS_INTRO_DURATION
@@ -614,6 +958,12 @@ class Game:
             else:
                 self.state = GameState.VICTORY
                 self.audio_manager.stop_music()
+                reward = self.progression_system.grant_run_victory_bonus()
+                self._queue_reward_toast(
+                    f"Victory bonus: +{reward.get('credits', 0)} Credits",
+                    (140, 255, 180),
+                )
+                self.run_in_progress = False
 
     def _play_boss_music(self, bosses):
         """Play mapped boss track for the current fight, if available."""
@@ -652,7 +1002,12 @@ class Game:
         upgrade_anchor = (
             self.get_alive_players()[0] if self.get_alive_players() else self.player
         )
-        self.pending_upgrades = self.upgrade_system.get_random_upgrades(upgrade_anchor)
+        defeated = self.boss_manager.bosses_defeated_count
+        self.milestone_upgrade_round = defeated > 0 and defeated % 5 == 0
+        if self.milestone_upgrade_round:
+            self.pending_upgrades = self.upgrade_system.get_milestone_upgrades(upgrade_anchor)
+        else:
+            self.pending_upgrades = self.upgrade_system.get_random_upgrades(upgrade_anchor)
         self.audio_manager.stop_music()
         self.state = GameState.UPGRADE
 
@@ -710,6 +1065,7 @@ class Game:
 
             self.pending_upgrades = []
             self.hovered_upgrade_index = -1
+            self.milestone_upgrade_round = False
 
             # Start next boss fight using the boss manager
             self.start_boss_fight()
@@ -862,8 +1218,12 @@ class Game:
             if not self.get_alive_players():
                 self.state = GameState.GAME_OVER
                 self.audio_manager.stop_music()
+                self.run_in_progress = False
                 for boss in self.current_bosses:
                     self.performance_logger.end_boss_fight(boss.name, victory=False)
+                self.progression_system.update_deepest_boss_count(
+                    self.boss_manager.bosses_defeated_count
+                )
 
             # Remove dead bosses from the list (but keep them for performance tracking)
             dead_bosses = [boss for boss in self.current_bosses if boss.health <= 0]
@@ -871,6 +1231,11 @@ class Game:
                 for dead_boss in dead_bosses:
                     self.performance_logger.end_boss_fight(dead_boss.name, victory=True)
                     self.boss_manager.on_boss_defeated(dead_boss)
+                    rewards = self.progression_system.grant_boss_rewards(
+                        dead_boss,
+                        weakened=bool(getattr(dead_boss, "is_weakened", False)),
+                    )
+                    self._queue_reward_summary(rewards)
 
                 # Remove dead bosses from current_bosses
                 self.current_bosses = [
@@ -880,6 +1245,9 @@ class Game:
                 # If any bosses died, add score immediately
                 if dead_bosses:
                     self.score += 500 * len(dead_bosses)
+                    self.progression_system.update_deepest_boss_count(
+                        self.boss_manager.bosses_defeated_count
+                    )
 
             # Check if all bosses are defeated
             all_bosses_defeated = len(self.current_bosses) == 0
@@ -908,6 +1276,18 @@ class Game:
         if self.screen_shake.duration > 0:
             self.screen_shake.update()
 
+        if self.progression_status_timer > 0:
+            self.progression_status_timer -= 1
+            if self.progression_status_timer <= 0:
+                self.progression_status_message = ""
+
+        active_toasts = []
+        for toast in self.reward_toasts:
+            toast["timer"] -= 1
+            if toast["timer"] > 0:
+                active_toasts.append(toast)
+        self.reward_toasts = active_toasts
+
     def draw(self):
         return draw_game(self)
 
@@ -923,17 +1303,44 @@ class Game:
                 if event.type == pygame.QUIT:
                     self.running = False
                 elif event.type == pygame.KEYDOWN:
+                    if self.state == GameState.JOIN_SETUP:
+                        self._handle_join_menu_key(event)
+                        continue
+                    if self.state == GameState.PROGRESSION:
+                        self._handle_progression_key(event)
+                        continue
                     if self.state == GameState.CUSTOMIZATION:
                         self._handle_customization_key(event)
                         continue
                     if event.key == pygame.K_F11:
                         self.toggle_fullscreen()
-                    elif event.key == pygame.K_c and self.state == GameState.MENU:
+                    elif event.key == pygame.K_h and self.state == GameState.MENU:
+                        self.open_host_lobby()
+                    elif event.key == pygame.K_j and self.state == GameState.MENU:
+                        self.open_join_menu()
+                    elif event.key == pygame.K_c and self.state in (GameState.MENU, GameState.LOBBY):
                         self.customization_player_index = 0
                         self.customization_field_index = 0
                         self.state = GameState.CUSTOMIZATION
+                    elif event.key == pygame.K_p and self.state in (GameState.MENU, GameState.LOBBY):
+                        self.progression_focus_area = "inventory"
+                        self.progression_selected_relic_index = 0
+                        self.progression_selected_slot_index = 0
+                        self.progression_status_message = ""
+                        self.state = GameState.PROGRESSION
                     elif event.key == pygame.K_SPACE:
-                        if self.state == GameState.MENU:
+                        if self.state in (GameState.MENU, GameState.LOBBY):
+                            if (
+                                self.network_mode == "host"
+                                and self.network_host
+                                and not self.can_start_from_lobby()
+                            ):
+                                self.error_handler.logger.info(
+                                    "Waiting for all connected clients to be ready."
+                                )
+                                continue
+                            self.start_boss_fight()
+                        elif self.state == GameState.VICTORY:
                             if (
                                 self.network_mode == "host"
                                 and self.network_host
@@ -943,8 +1350,6 @@ class Game:
                                     "Waiting for all connected clients to be ready."
                                 )
                                 continue
-                            self.start_boss_fight()
-                        elif self.state == GameState.VICTORY:
                             self.reset_game()
                             self.start_boss_fight()
                     elif self.state == GameState.UPGRADE:
@@ -985,6 +1390,7 @@ class Game:
         self.audio_manager.cleanup()
         if self.network_host:
             self.network_host.stop()
+        self.progression_system.save_profile()
         self._flush_replay_log()
 
 
@@ -995,3 +1401,5 @@ if __name__ == "__main__":
     else:
         game = Game()
         game.run()
+        if game.launch_network_client_after_exit:
+            run_network_client()

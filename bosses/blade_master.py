@@ -410,6 +410,10 @@ class BladeMaster(Boss):
         if hasattr(self, 'use_sprite') and self.use_sprite:
             # Draw the Blade Master sprite
             self.draw_sprite_to_hitbox(screen)
+            for projectile in self.projectiles:
+                projectile.draw(screen)
+            for effect in self.effects:
+                effect.draw(screen)
         else:
             # Fallback: Draw boss rectangle
             Boss.draw(self, screen)
@@ -420,5 +424,8 @@ class BladeMaster(Boss):
         # Draw mirror blades
         for blade in self.mirror_blades:
             blade.draw(screen)
+
+        self.health_bar_color = ORANGE
+        self.draw_health_bar(screen)
 
 

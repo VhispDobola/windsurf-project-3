@@ -20,6 +20,21 @@ MAX_JSON_BYTES = 64 * 1024
 MAX_BLOB_BYTES = 16 * 1024 * 1024
 
 
+def _sanitize_profile(profile):
+    if not isinstance(profile, dict):
+        profile = {}
+    username = str(profile.get("username", "Player")).strip()[:16] or "Player"
+    color = profile.get("color", [0, 100, 255])
+    if not isinstance(color, (list, tuple)) or len(color) != 3:
+        color = [0, 100, 255]
+    hat = str(profile.get("hat", "None")).strip() or "None"
+    return {
+        "username": username,
+        "color": [max(0, min(255, int(channel))) for channel in color],
+        "hat": hat,
+    }
+
+
 def _send_message(sock, message, blob=b""):
     msg_bytes = json.dumps(message, separators=(",", ":")).encode("utf-8")
     header = struct.pack("!II", len(msg_bytes), len(blob))
@@ -136,6 +151,7 @@ class NetworkHost:
                 idx: {
                     "ready": bool(info.get("ready", False)),
                     "ping_ms": int(info.get("ping_ms", 0)),
+                    "profile": dict(info.get("profile", {})),
                 }
                 for idx, info in self.clients.items()
             }
@@ -198,6 +214,7 @@ class NetworkHost:
                 raise ValueError("protocol version mismatch")
 
             requested_index = int(join_msg.get("player_index", 0))
+            profile = _sanitize_profile(join_msg.get("profile", {}))
             with self._lock:
                 if requested_index <= 0:
                     requested_index = self._find_free_slot() or 0
@@ -228,6 +245,7 @@ class NetworkHost:
                     "bytes_in": 0,
                     "bytes_out": 0,
                     "last_crc": None,
+                    "profile": profile,
                 }
                 self.input_states[requested_index] = {}
                 player_index = requested_index
@@ -286,6 +304,11 @@ class NetworkHost:
                             info = self.clients.get(player_index)
                             if info:
                                 info["ready"] = ready_flag
+                    elif msg_type == "profile":
+                        with self._lock:
+                            info = self.clients.get(player_index)
+                            if info:
+                                info["profile"] = _sanitize_profile(msg.get("profile", {}))
                     elif msg_type == "ping":
                         ts = float(msg.get("ts", now))
                         _send_message(sock, {"type": "pong", "ts": ts})
@@ -401,16 +424,25 @@ class NetworkHost:
         crc = int(zlib.crc32(raw) & 0xFFFFFFFF)
         packed = zlib.compress(raw, self.zlib_level)
         self._send_to_clients(
-            {"type": "frame", "w": w, "h": h, "crc": crc, "encoding": "zlib-rgb", "server_time": now},
+            {
+                "type": "frame",
+                "w": w,
+                "h": h,
+                "crc": crc,
+                "encoding": "zlib-rgb",
+                "server_time": now,
+                "state": world_state or {},
+            },
             packed,
         )
 
 
 class NetworkClient:
-    def __init__(self, host, port, player_index):
+    def __init__(self, host, port, player_index, profile=None):
         self.host = host
         self.port = int(port)
         self.requested_player_index = int(player_index)
+        self.profile = _sanitize_profile(profile)
         self.assigned_player_index = None
         self.assigned_player_slot = None
         self.sync_mode = "frame"
@@ -433,6 +465,7 @@ class NetworkClient:
             "type": "join",
             "player_index": self.requested_player_index,
             "version": PROTOCOL_VERSION,
+            "profile": dict(self.profile),
         }
         _send_message(self.sock, join_msg)
         msg, _blob = _recv_message(self.sock)
@@ -462,6 +495,20 @@ class NetworkClient:
             return
         try:
             sent_bytes = _send_message(self.sock, {"type": "ready", "ready": bool(ready)})
+            with self._lock:
+                self.bytes_out += int(sent_bytes)
+        except OSError:
+            self.running = False
+
+    def set_profile(self, profile):
+        self.profile = _sanitize_profile(profile)
+        if not self.sock or not self.running:
+            return
+        try:
+            sent_bytes = _send_message(
+                self.sock,
+                {"type": "profile", "profile": dict(self.profile)},
+            )
             with self._lock:
                 self.bytes_out += int(sent_bytes)
         except OSError:

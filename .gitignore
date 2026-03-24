@@ -124,6 +124,10 @@ dmypy.json
 
 # Game specific
 *.log
-data/*.json
+.launcher_state.json
+data/player_profile.json
+data/settings.json
+data/balance_adjustments.json
+data/boss_performance_log.json
 .DS_Store
 Thumbs.db

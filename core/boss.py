@@ -187,17 +187,23 @@ class Boss(Entity):
 
         health_bar_width = 300
         health_bar_height = 8
-        health_percentage = max(0, self.health / self.max_health)
+        max_health = max(1, self.max_health)
+        health_percentage = max(0.0, min(1.0, self.health / max_health))
         screen_width = screen.get_width() if hasattr(screen, "get_width") else WIDTH
         bar_x = screen_width // 2 - health_bar_width // 2
         bar_y = 30
         
-        # Background
-        pygame.draw.rect(screen, RED, (bar_x, bar_y, health_bar_width, health_bar_height))
+        # Background and border keep the fill readable even for red-themed bosses.
+        background_rect = pygame.Rect(bar_x, bar_y, health_bar_width, health_bar_height)
+        pygame.draw.rect(screen, (45, 10, 10), background_rect)
+        pygame.draw.rect(screen, WHITE, background_rect, 1)
         
         # Health fill - use boss color or green
         health_color = getattr(self, 'health_bar_color', GREEN)
-        pygame.draw.rect(screen, health_color, (bar_x, bar_y, health_bar_width * health_percentage, health_bar_height))
+        fill_width = int(health_bar_width * health_percentage)
+        if self.health > 0 and fill_width <= 0:
+            fill_width = 1
+        pygame.draw.rect(screen, health_color, (bar_x, bar_y, fill_width, health_bar_height))
         
         # Phase markers (60% and 30%)
         marker_color = (30, 30, 30)

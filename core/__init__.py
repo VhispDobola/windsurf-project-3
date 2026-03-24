@@ -17,6 +17,7 @@ from .movement_system import BossMovementController, SineWaveMovement, CircularM
 from .boss_patterns import BossAttackPattern, BossMovementPattern, BossPhaseManager
 from .object_pool import ObjectPool, ProjectilePool, EffectPool, PoolManager
 from .input_manager import InputManager, InputAction
+from .progression_system import ProgressionSystem
 
 __all__ = [
     'Entity', 'DamageType', 'Boss', 'Player', 'Projectile', 'ProjectileBehavior',
@@ -26,4 +27,5 @@ __all__ = [
     'SineWaveMovement', 'CircularMovement', 'BossAttackPattern',
     'BossMovementPattern', 'BossPhaseManager', 'ObjectPool', 'ProjectilePool',
     'EffectPool', 'PoolManager', 'InputManager', 'InputAction'
+    , 'ProgressionSystem'
 ]

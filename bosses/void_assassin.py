@@ -273,13 +273,17 @@ class VoidAssassin(Boss):
             ))
 
     def void_projectile_attack(self, count):
-        """Dark homing orbs to match void projectile pressure from design doc."""
+        """Dark orbs that briefly curve toward the player, then commit to their lane."""
         cx = self.x + self.width // 2
         cy = self.y + self.height // 2
         for i in range(count):
             angle = (math.pi * 2 * i) / max(1, count)
             orb = Projectile(cx, cy, math.cos(angle) * 3.5, math.sin(angle) * 3.5, 9, PURPLE, 6)
             orb.void_homing = True
+            orb.void_homing_frames = 28
+            orb.void_homing_interval = 1
+            orb.void_homing_strength = 0.04
+            orb.void_target_locked = False
             self.projectiles.append(orb)
                 
     def movement(self):
@@ -311,8 +315,21 @@ class VoidAssassin(Boss):
             ty = self.game.player.y + self.game.player.height // 2
             for projectile in self.projectiles:
                 if hasattr(projectile, 'void_homing') and projectile.void_homing:
-                    if hasattr(projectile, "steer_towards"):
-                        projectile.steer_towards(tx, ty, desired_speed=4.6, max_turn=0.07, accel=0.20)
+                    homing_frames = getattr(projectile, "void_homing_frames", 0)
+                    if homing_frames > 0 and hasattr(projectile, "steer_towards"):
+                        interval = max(1, int(getattr(projectile, "void_homing_interval", 1)))
+                        if homing_frames % interval == 0:
+                            projectile.steer_towards(
+                                tx,
+                                ty,
+                                desired_speed=4.4,
+                                max_turn=float(getattr(projectile, "void_homing_strength", 0.04)),
+                                accel=0.14,
+                            )
+                        projectile.void_homing_frames = homing_frames - 1
+                    else:
+                        projectile.void_homing = False
+                        projectile.void_target_locked = True
                 
     def draw(self, screen):
         # Draw particles first (behind everything)

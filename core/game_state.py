@@ -7,7 +7,10 @@ from enum import Enum
 
 class GameState(Enum):
     MENU = "menu"
+    LOBBY = "lobby"
+    JOIN_SETUP = "join_setup"
     CUSTOMIZATION = "customization"
+    PROGRESSION = "progression"
     BOSS_INTRO = "boss_intro"
     FIGHTING = "fighting"
     UPGRADE = "upgrade"

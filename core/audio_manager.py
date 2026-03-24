@@ -43,35 +43,50 @@ class AudioManager:
         except pygame.error as e:
             self.logger.warning("Could not initialize audio mixer: %s", e)
             self.enabled = False
+
+    def _load_sound_from_candidates(self, filenames):
+        for filename in filenames:
+            path = os.path.join(self.sound_dir, filename)
+            if not os.path.exists(path):
+                continue
+            try:
+                sound = pygame.mixer.Sound(path)
+                sound.set_volume(self.sound_volume)
+                return sound
+            except pygame.error as e:
+                self.logger.warning("Could not load sound %s: %s", filename, e)
+        return None
     
     def load_sounds(self):
-        """Load all sound files"""
+        """Load standard sound files when they are present in the repo."""
         if not self.enabled:
             return
             
         sound_files = {
-            SoundType.PLAYER_SHOOT: "player_shoot.wav",
-            SoundType.PLAYER_HIT: "player_hit.wav",
-            SoundType.PLAYER_DASH: "player_dash.wav",
-            SoundType.BOSS_HIT: "boss_hit.wav",
-            SoundType.BOSS_DEFEATED: "boss_defeated.wav",
-            SoundType.UPGRADE: "upgrade.wav",
-            SoundType.MENU_SELECT: "menu_select.wav",
-            SoundType.MENU_CONFIRM: "menu_confirm.wav",
-            SoundType.EXPLOSION: "explosion.wav",
+            SoundType.PLAYER_SHOOT: ("player_shoot.wav", "player_shoot.mp3"),
+            SoundType.PLAYER_HIT: ("player_hit.wav", "player_hit.mp3"),
+            SoundType.PLAYER_DASH: ("player_dash.wav", "player_dash.mp3", "blade_dash.mp3"),
+            SoundType.BOSS_HIT: ("boss_hit.wav", "boss_hit.mp3"),
+            SoundType.BOSS_DEFEATED: ("boss_defeated.wav", "boss_defeated.mp3"),
+            SoundType.UPGRADE: ("upgrade.wav", "upgrade.mp3"),
+            SoundType.MENU_SELECT: ("menu_select.wav", "menu_select.mp3"),
+            SoundType.MENU_CONFIRM: ("menu_confirm.wav", "menu_confirm.mp3"),
+            SoundType.EXPLOSION: ("explosion.wav", "explosion.mp3"),
         }
         
-        for sound_type, filename in sound_files.items():
-            path = os.path.join(self.sound_dir, filename)
-            if os.path.exists(path):
-                try:
-                    sound = pygame.mixer.Sound(path)
-                    sound.set_volume(self.sound_volume)
-                    self.sounds[sound_type] = sound
-                except pygame.error as e:
-                    self.logger.warning("Could not load sound %s: %s", filename, e)
+        missing = []
+        for sound_type, filenames in sound_files.items():
+            sound = self._load_sound_from_candidates(filenames)
+            if sound is not None:
+                self.sounds[sound_type] = sound
             else:
-                self.logger.warning("Sound file not found: %s", path)
+                missing.append(sound_type.value)
+
+        if missing:
+            self.logger.info(
+                "Optional sound effects not bundled; continuing without: %s",
+                ", ".join(missing),
+            )
     
     def play_sound(self, sound_type: SoundType, volume_scale: float = 1.0):
         """Play a sound effect"""

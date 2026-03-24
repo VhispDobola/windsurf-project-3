@@ -58,6 +58,7 @@ class TheVirusQueen(Boss):
         self.second_phase = False
         self.original_health = 600
         self.damage_cooldowns = {}  # Track damage cooldowns for each projectile
+        self.corruption_damage_cooldowns = {}
         self.firewalls = []
         self.attack_sprites = {}
         
@@ -139,6 +140,12 @@ class TheVirusQueen(Boss):
                 self.damage_cooldowns[proj_id] -= 1
             else:
                 del self.damage_cooldowns[proj_id]
+
+        for cooldown_key in list(self.corruption_damage_cooldowns.keys()):
+            if self.corruption_damage_cooldowns[cooldown_key] > 0:
+                self.corruption_damage_cooldowns[cooldown_key] -= 1
+            else:
+                del self.corruption_damage_cooldowns[cooldown_key]
         
         if self.phase == 1:
             if self.virus_spread_timer <= 0:
@@ -383,20 +390,20 @@ class TheVirusQueen(Boss):
         # Create expanding ring of virus particles
         for ring in range(3):
             radius = 30 + ring * 20
-            for i in range(12):
-                angle = (math.pi * 2 * i) / 12
+            for i in range(10):
+                angle = (math.pi * 2 * i) / 10
                 x = burst_x + math.cos(angle) * radius
                 y = burst_y + math.sin(angle) * radius
 
                 outward_angle = math.atan2(y - burst_y, x - burst_x)
-                speed = 2.6 + ring * 0.8
+                speed = 2.2 + ring * 0.65
                 virus = self._spawn_projectile(
                     x, y, math.cos(outward_angle) * speed, math.sin(outward_angle) * speed,
-                    12, self.color, radius=7, lifetime=180, behavior=ProjectileBehavior.MUTATION,
+                    8, self.color, radius=6, lifetime=150, behavior=ProjectileBehavior.MUTATION,
                     sprite_key="data_corruption"
                 )
                 virus.mutation = True
-                virus.homing_delay = random.randint(22, 45)
+                virus.homing_delay = random.randint(34, 58)
                 
         # Create mutation visual effect
         for _ in range(50):
@@ -539,13 +546,16 @@ class TheVirusQueen(Boss):
             # Check collision with player
             if self.game and self.game.player:
                 if corruption.get_rect().colliderect(self.game.player.get_rect()):
-                    damage = corruption.damage
-                    self.game.player.take_damage(damage)
-                    
-                    # Log ability damage
-                    if hasattr(self.game, 'performance_logger'):
-                        phase_name = ["Phase 1", "Phase 2", "Phase 3"][self.phase - 1]
-                        self.game.performance_logger.log_ability_damage(self.name, f"{phase_name} - Corruption Spread", damage)
+                    cooldown_key = (id(corruption), id(self.game.player))
+                    if self.corruption_damage_cooldowns.get(cooldown_key, 0) <= 0:
+                        damage = corruption.damage
+                        self.game.player.take_damage(damage)
+                        self.corruption_damage_cooldowns[cooldown_key] = 32
+
+                        # Log ability damage
+                        if hasattr(self.game, 'performance_logger'):
+                            phase_name = ["Phase 1", "Phase 2", "Phase 3"][self.phase - 1]
+                            self.game.performance_logger.log_ability_damage(self.name, f"{phase_name} - Corruption Spread", damage)
                     
             # Remove old corruptions
             if corruption.radius >= corruption.max_radius:

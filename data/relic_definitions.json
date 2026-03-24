@@ -1,0 +1,242 @@
+{
+  "relics": [
+    {
+      "id": "guardian_core",
+      "name": "Guardian Core",
+      "source_boss": "Eternal Guardian",
+      "theme": "Bulwark field emitter",
+      "icon_path": "assets/relics/guardian_core.png",
+      "appearance": "A dark metal circular core with a brilliant cyan lens at its center, surrounded by glowing blue energy rings like a compact shield generator.",
+      "category": "defense",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 260, "essence_eternal_guardian": 8},
+      "rank_costs": [
+        {"credits": 150, "essence_eternal_guardian": 4},
+        {"credits": 240, "essence_eternal_guardian": 6}
+      ],
+      "ui_desc": "Gain a regenerating shield. It returns after 3s without being hit, but you take 8% more damage.",
+      "effects": {
+        "shield_max_flat": 10,
+        "shield_regen_delay_frames": 180,
+        "shield_regen_rate_flat": 2,
+        "damage_taken_mult": 1.08
+      }
+    },
+    {
+      "id": "blade_emblem",
+      "name": "Blade Emblem",
+      "source_boss": "Blade Master",
+      "theme": "Sharpened edge sigil",
+      "icon_path": "assets/relics/blade_emblem.png",
+      "appearance": "A pair of crossed silver blades bound by a deep red wrap, with a gold-edged crest at the center and red slash energy flaring behind them.",
+      "category": "offense",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 300, "essence_blade_master": 8},
+      "rank_costs": [
+        {"credits": 160, "essence_blade_master": 4},
+        {"credits": 260, "essence_blade_master": 6}
+      ],
+      "ui_desc": "+2 projectile damage per rank, but +6% shoot cooldown per rank.",
+      "effects": {"projectile_damage_flat": 2, "shoot_cooldown_mult": 1.06}
+    },
+    {
+      "id": "nexus_lens",
+      "name": "Nexus Lens",
+      "source_boss": "Nexus Core",
+      "theme": "Targeting crystal",
+      "icon_path": "assets/relics/nexus_lens.png",
+      "appearance": "A radiant blue-white orb held inside an ornate gold and navy frame, with fiery golden energy curling around it like a focused cosmic lens.",
+      "category": "utility",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 280, "essence_nexus_core": 8},
+      "rank_costs": [
+        {"credits": 150, "essence_nexus_core": 4},
+        {"credits": 250, "essence_nexus_core": 6}
+      ],
+      "ui_desc": "-10% shoot cooldown per rank, but -4 max health per rank.",
+      "effects": {"shoot_cooldown_mult": 0.9, "max_health_flat": -4}
+    },
+    {
+      "id": "voidstep_spindle",
+      "name": "Voidstep Spindle",
+      "source_boss": "Void Assassin",
+      "theme": "Phase-threaded spool",
+      "icon_path": "assets/relics/voidstep_spindle.png",
+      "appearance": "A narrow obsidian spindle threaded with violet energy strands that blur at the edges.",
+      "category": "mobility",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 280, "essence_void_assassin": 8},
+      "rank_costs": [
+        {"credits": 150, "essence_void_assassin": 4},
+        {"credits": 250, "essence_void_assassin": 6}
+      ],
+      "ui_desc": "+0.5 speed per rank, but -8 max health per rank.",
+      "effects": {"base_speed_flat": 0.5, "max_health_flat": -8}
+    },
+    {
+      "id": "chrono_spring",
+      "name": "Chrono Spring",
+      "source_boss": "Chronomancer",
+      "theme": "Compressed time coil",
+      "icon_path": "assets/relics/chrono_spring.png",
+      "appearance": "A brass spiral spring surrounding a glowing clock core, shedding pale blue motes of light.",
+      "category": "mobility",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 290, "essence_chronomancer": 8},
+      "rank_costs": [
+        {"credits": 160, "essence_chronomancer": 4},
+        {"credits": 260, "essence_chronomancer": 6}
+      ],
+      "ui_desc": "-12% dash cooldown per rank, but +10% damage taken per rank.",
+      "effects": {"dash_cooldown_mult": 0.88, "damage_taken_mult": 1.1}
+    },
+    {
+      "id": "queen_shard",
+      "name": "Queen Shard",
+      "source_boss": "The Virus Queen",
+      "theme": "Adaptive viral crystal",
+      "icon_path": "assets/relics/queen_shard.png",
+      "appearance": "A jagged magenta shard with branching neon veins and a pulsing, unstable inner glow.",
+      "category": "utility",
+      "max_rank": 2,
+      "unlock_cost": {"credits": 320, "essence_the_virus_queen": 10},
+      "rank_costs": [
+        {"credits": 220, "essence_the_virus_queen": 6}
+      ],
+      "ui_desc": "+1 spread shot level per rank, but +12% shoot cooldown per rank.",
+      "effects": {"spread_shot_level_flat": 1, "shoot_cooldown_mult": 1.12}
+    },
+    {
+      "id": "tempest_feather",
+      "name": "Tempest Feather",
+      "source_boss": "Tempest Lord",
+      "theme": "Storm-carved plume",
+      "icon_path": "assets/relics/tempest_feather.png",
+      "appearance": "A long silver-blue feather crackling with static and trailing tiny arcs of wind-tossed light.",
+      "category": "mobility",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 280, "essence_tempest_lord": 8},
+      "rank_costs": [
+        {"credits": 150, "essence_tempest_lord": 4},
+        {"credits": 250, "essence_tempest_lord": 6}
+      ],
+      "ui_desc": "+1.5 projectile speed per rank, but -0.15 movement speed per rank.",
+      "effects": {"projectile_speed_flat": 1.5, "base_speed_flat": -0.15}
+    },
+    {
+      "id": "thunder_capacitor",
+      "name": "Thunder Capacitor",
+      "source_boss": "Thunder Emperor",
+      "theme": "High-voltage reserve cell",
+      "icon_path": "assets/relics/thunder_capacitor.png",
+      "appearance": "A gold cylinder packed with bright lightning coils and capped by humming storm-metal plates.",
+      "category": "offense",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 320, "essence_thunder_emperor": 8},
+      "rank_costs": [
+        {"credits": 170, "essence_thunder_emperor": 4},
+        {"credits": 280, "essence_thunder_emperor": 6}
+      ],
+      "ui_desc": "+12% dash speed per rank, but +8% dash cooldown per rank.",
+      "effects": {"dash_speed_mult": 1.12, "dash_cooldown_mult": 1.08}
+    },
+    {
+      "id": "phoenix_ember",
+      "name": "Phoenix Ember",
+      "source_boss": "Immortal Phoenix",
+      "theme": "Self-mending ember",
+      "icon_path": "assets/relics/phoenix_ember.png",
+      "appearance": "A smoldering emberstone with a molten orange core and soft red feathers of flame around it.",
+      "category": "defense",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 340, "essence_immortal_phoenix": 9},
+      "rank_costs": [
+        {"credits": 180, "essence_immortal_phoenix": 5},
+        {"credits": 300, "essence_immortal_phoenix": 7}
+      ],
+      "ui_desc": "+2 regen level per rank, but -10 max health per rank.",
+      "effects": {"regen_level_flat": 2, "max_health_flat": -10}
+    },
+    {
+      "id": "crystal_plate",
+      "name": "Crystal Plate",
+      "source_boss": "Crystalline Destroyer",
+      "theme": "Faceted armor splinter",
+      "icon_path": "assets/relics/crystal_plate.png",
+      "appearance": "A broad prism plate of pale violet crystal, cut into layered facets that catch the light.",
+      "category": "defense",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 320, "essence_crystalline_destroyer": 8},
+      "rank_costs": [
+        {"credits": 170, "essence_crystalline_destroyer": 4},
+        {"credits": 280, "essence_crystalline_destroyer": 6}
+      ],
+      "ui_desc": "+14 starting heal per rank, but +6% damage taken per rank.",
+      "effects": {"starting_heal_flat": 14, "damage_taken_mult": 1.06}
+    },
+    {
+      "id": "dragon_fang",
+      "name": "Dragon Fang",
+      "source_boss": "Eternal Dragon",
+      "theme": "Ancient piercing fang",
+      "icon_path": "assets/relics/dragon_fang.png",
+      "appearance": "A long ivory fang engraved with ember-red runes and banded in dark bronze near the base.",
+      "category": "offense",
+      "max_rank": 1,
+      "unlock_cost": {"credits": 420, "essence_eternal_dragon": 12},
+      "rank_costs": [],
+      "ui_desc": "Shots pierce and gain +3 damage, but you take 15% more damage.",
+      "effects": {"piercing_shots": true, "projectile_damage_flat": 3, "damage_taken_mult": 1.15}
+    },
+    {
+      "id": "frost_loop",
+      "name": "Frost Loop",
+      "source_boss": "Ice Tyrant",
+      "theme": "Cryo-stable circuit",
+      "icon_path": "assets/relics/frost_loop.png",
+      "appearance": "A circular ring of frosted crystal and steel, rimmed with drifting flakes and a cold blue sheen.",
+      "category": "utility",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 300, "essence_ice_tyrant": 8},
+      "rank_costs": [
+        {"credits": 160, "essence_ice_tyrant": 4},
+        {"credits": 260, "essence_ice_tyrant": 6}
+      ],
+      "ui_desc": "+8 max health and +0.2 speed per rank, but +4% shoot cooldown per rank.",
+      "effects": {"max_health_flat": 8, "base_speed_flat": 0.2, "shoot_cooldown_mult": 1.04}
+    },
+    {
+      "id": "magma_heart",
+      "name": "Magma Heart",
+      "source_boss": "Magma Sovereign",
+      "theme": "Smoldering reactor stone",
+      "icon_path": "assets/relics/magma_heart.png",
+      "appearance": "A heavy black-red stone with glowing lava seams, radiating heat through cracked metallic braces.",
+      "category": "offense",
+      "max_rank": 3,
+      "unlock_cost": {"credits": 330, "essence_magma_sovereign": 8},
+      "rank_costs": [
+        {"credits": 180, "essence_magma_sovereign": 4},
+        {"credits": 290, "essence_magma_sovereign": 6}
+      ],
+      "ui_desc": "+2 damage and +1 projectile speed per rank, but -6 max health per rank.",
+      "effects": {"projectile_damage_flat": 2, "projectile_speed_flat": 1, "max_health_flat": -6}
+    },
+    {
+      "id": "overlord_mesh",
+      "name": "Overlord Mesh",
+      "source_boss": "Cyber Overlord",
+      "theme": "Reflective defense lattice",
+      "icon_path": "assets/relics/overlord_mesh.png",
+      "appearance": "A folded sheet of chrome-black mesh threaded with teal circuitry and mirror-bright facets.",
+      "category": "defense",
+      "max_rank": 2,
+      "unlock_cost": {"credits": 360, "essence_cyber_overlord": 10},
+      "rank_costs": [
+        {"credits": 240, "essence_cyber_overlord": 6}
+      ],
+      "ui_desc": "+3 reflection charges per rank, but -0.2 movement speed per rank.",
+      "effects": {"reflect_charges_flat": 3, "base_speed_flat": -0.2}
+    }
+  ]
+}

@@ -20,6 +20,19 @@ def apply_customization_to_player(game, player, player_index):
     player.hat_style = profile.get("hat", "None")
 
 
+def persist_primary_identity(game):
+    if not getattr(game, "progression_system", None):
+        return
+    if not game.player_customizations:
+        return
+    profile = game.player_customizations[0]
+    game.progression_system.update_player_identity(
+        username=profile.get("username"),
+        color=profile.get("color"),
+        hat=profile.get("hat"),
+    )
+
+
 def cycle_color(game, direction):
     if not game.players:
         return
@@ -33,6 +46,8 @@ def cycle_color(game, direction):
     new_color = game.color_options[new_idx]
     game.players[idx].color = new_color
     game.player_customizations[idx]["color"] = new_color
+    if idx == 0:
+        persist_primary_identity(game)
 
 
 def cycle_hat(game, direction):
@@ -48,6 +63,8 @@ def cycle_hat(game, direction):
     new_hat = game.hat_options[new_idx]
     game.players[idx].hat_style = new_hat
     game.player_customizations[idx]["hat"] = new_hat
+    if idx == 0:
+        persist_primary_identity(game)
 
 
 def append_username_char(game, char):
@@ -64,6 +81,8 @@ def append_username_char(game, char):
     updated = current + char
     game.players[idx].username = updated
     game.player_customizations[idx]["username"] = updated
+    if idx == 0:
+        persist_primary_identity(game)
 
 
 def remove_username_char(game):
@@ -76,11 +95,13 @@ def remove_username_char(game):
         updated = f"P{idx + 1}"
     game.players[idx].username = updated
     game.player_customizations[idx]["username"] = updated
+    if idx == 0:
+        persist_primary_identity(game)
 
 
 def handle_customization_key(game, event):
     if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
-        game.state = GameState.MENU
+        game.state = game._default_frontend_state()
         return
 
     if event.key == pygame.K_TAB:

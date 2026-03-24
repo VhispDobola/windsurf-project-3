@@ -1,5 +1,10 @@
 import random
 from config.constants import BOSS_GLOBAL_HEALTH_MULTIPLIER
+from config.constants import (
+    PLAYER_BASE_HEALTH, PLAYER_BASE_SPEED, PLAYER_DASH_SPEED,
+    PLAYER_DASH_COOLDOWN, PLAYER_SHOOT_COOLDOWN,
+    PLAYER_PROJECTILE_DAMAGE, PLAYER_PROJECTILE_SPEED,
+)
 from utils import load_log_driven_balance
 from bosses import (
     EternalGuardian, BladeMaster, NexusCore, VoidAssassin, 
@@ -28,12 +33,15 @@ class BossManager:
     # Log-driven per-boss tuning layer on top of progression scaling.
     # Values are conservative and can be iterated from future logs.
     BOSS_BALANCE = {
-        "Void Assassin": {"health": 0.62, "damage": 1.10},
-        "Chronomancer": {"health": 0.72, "damage": 1.00},
-        "Thunder Emperor": {"health": 0.86, "damage": 1.00},
-        "Tempest Lord": {"health": 1.08, "damage": 0.72},
+        "Void Assassin": {"health": 0.82, "damage": 1.06},
+        "Chronomancer": {"health": 0.86, "damage": 1.08},
+        "Thunder Emperor": {"health": 1.02, "damage": 1.14},
+        "Tempest Lord": {"health": 1.12, "damage": 0.92},
         "Ice Tyrant": {"health": 0.96, "damage": 0.92},
         "Magma Sovereign": {"health": 0.95, "damage": 0.92},
+        "Nexus Core": {"health": 1.08, "damage": 1.04},
+        "Eternal Guardian": {"health": 1.18, "damage": 1.04},
+        "Cyber Overlord": {"health": 1.08, "damage": 1.02},
     }
 
     def __init__(self):
@@ -107,17 +115,17 @@ class BossManager:
         """Scale boss health and damage based on progression"""
         count = self.bosses_defeated_count
         if count < 5:
-            health_scale = 0.9
-            damage_scale = 0.85
+            health_scale = 0.98
+            damage_scale = 0.92
         elif count < 10:
-            health_scale = 1.0
-            damage_scale = 1.0
+            health_scale = 1.10
+            damage_scale = 1.04
         elif count < 15:
-            health_scale = 1.1
-            damage_scale = 1.15
+            health_scale = 1.24
+            damage_scale = 1.16
         else:
-            health_scale = 1.25
-            damage_scale = 1.3
+            health_scale = 1.42
+            damage_scale = 1.30
         
         # Apply per-boss balance first, then progression scaling.
         boss_name = getattr(boss, "name", "")
@@ -134,12 +142,61 @@ class BossManager:
         if hasattr(boss, 'original_health'):
             boss.original_health = boss.max_health
 
+    def apply_player_progression_scaling(self, boss, players):
+        """Scale bosses to keep pace with upgraded players."""
+        if not players:
+            return
+
+        alive_or_all = [player for player in players if player is not None]
+        if not alive_or_all:
+            return
+
+        def avg(getter):
+            values = [getter(player) for player in alive_or_all]
+            return sum(values) / len(values)
+
+        offense_score = (
+            0.40 * (avg(lambda p: p.projectile_damage) / PLAYER_PROJECTILE_DAMAGE) +
+            0.30 * (PLAYER_SHOOT_COOLDOWN / max(1.0, avg(lambda p: p.shoot_cooldown_frames))) +
+            0.15 * (avg(lambda p: p.projectile_speed) / PLAYER_PROJECTILE_SPEED) +
+            0.15 * (avg(lambda p: p.base_speed) / PLAYER_BASE_SPEED)
+        )
+        defense_score = (
+            0.45 * (avg(lambda p: p.max_health) / PLAYER_BASE_HEALTH) +
+            0.20 * (avg(lambda p: p.dash_speed) / PLAYER_DASH_SPEED) +
+            0.20 * (PLAYER_DASH_COOLDOWN / max(1.0, avg(lambda p: p.dash_cooldown_frames))) +
+            0.15 * (avg(lambda p: p.base_speed) / PLAYER_BASE_SPEED)
+        )
+
+        power_delta = max(0.0, max(offense_score, defense_score) - 1.0)
+        if power_delta <= 0:
+            return
+
+        boss.max_health = max(1, int(boss.max_health * (1.0 + power_delta * 0.34)))
+        boss.health = min(max(1, boss.max_health), boss.max_health)
+        boss.damage_scale = getattr(boss, 'damage_scale', 1.0) * (1.0 + power_delta * 0.20)
+        boss._player_progression_scale = power_delta
+
     def _apply_canonical_name(self, boss):
         """Enforce canonical display names for consistency across UI/logs."""
         class_name = type(boss).__name__
         canonical_name = self.CANONICAL_BOSS_NAMES.get(class_name)
         if canonical_name:
             boss.name = canonical_name
+
+    @classmethod
+    def canonical_boss_id_from_name(cls, name):
+        normalized = (name or "").strip().lower()
+        slug = []
+        last_sep = False
+        for char in normalized:
+            if char.isalnum():
+                slug.append(char)
+                last_sep = False
+            elif not last_sep:
+                slug.append("_")
+                last_sep = True
+        return "".join(slug).strip("_")
 
     def validate_boss_name_consistency(self):
         """Return list of (class_name, actual_name, expected_name) mismatches."""

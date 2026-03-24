@@ -109,19 +109,28 @@ class TempestLord(Boss):
             
     def chain_lightning(self):
         # Create chain lightning that bounces
-        start_x = self.x + self.width // 2
-        start_y = self.y + self.height // 2
-        
+        if self.game and self.game.player:
+            start_x = self.game.player.x + self.game.player.width // 2
+            start_y = self.game.player.y + self.game.player.height // 2
+        else:
+            start_x = self.x + self.width // 2
+            start_y = self.y + self.height // 2
+
         for i in range(4):
             angle = random.uniform(0, math.pi * 2)
-            end_x = start_x + math.cos(angle) * 200
-            end_y = start_y + math.sin(angle) * 200
+            distance = 140 + i * 35
+            end_x = start_x + math.cos(angle) * distance
+            end_y = start_y + math.sin(angle) * distance
+            end_x = max(60, min(WIDTH - 60, end_x))
+            end_y = max(80, min(HEIGHT - 60, end_y))
             
-            lightning = Projectile(start_x, start_y, 0, 0, 9, (200, 200, 255), 9)
+            lightning = Projectile(start_x, start_y, 0, 0, 11, (200, 200, 255), 12)
             lightning.chain = True
             lightning.chain_end_x = end_x
             lightning.chain_end_y = end_y
             lightning.lifetime = 100
+            lightning.segment_width = 20
+            lightning.damage_cooldown = 0
             self.lightning_network.append(lightning)
             
             start_x, start_y = end_x, end_y
@@ -349,6 +358,12 @@ class TempestLord(Boss):
         # Update lightning network
         for lightning in self.lightning_network[:]:
             lightning.update()
+            if hasattr(lightning, 'damage_cooldown') and lightning.damage_cooldown > 0:
+                lightning.damage_cooldown -= 1
+            if self.game and self.game.player and self._segment_hits_player(lightning):
+                if getattr(lightning, 'damage_cooldown', 0) <= 0:
+                    self.game.player.take_damage(lightning.damage)
+                    lightning.damage_cooldown = 20
             # Remove if off screen or lifetime expired
             if lightning.is_off_screen() or (hasattr(lightning, 'lifetime') and lightning.lifetime <= 0):
                 self.lightning_network.remove(lightning)
@@ -453,6 +468,9 @@ class TempestLord(Boss):
         else:
             # Fallback to default boss drawing
             Boss.draw(self, screen)
+
+        for effect in self.effects:
+            effect.draw(screen)
         
         # Draw storm aura
         aura_radius = 80 + self.phase * 20
@@ -465,5 +483,35 @@ class TempestLord(Boss):
         # Use the base health bar drawing with custom color
         self.health_bar_color = (100, 100, 255)
         self.draw_health_bar(screen)
+
+    def _segment_hits_player(self, lightning):
+        if not (hasattr(lightning, 'chain_end_x') and hasattr(lightning, 'chain_end_y')):
+            return False
+        player = self.game.player
+        points = [
+            (player.x, player.y),
+            (player.x + player.width, player.y),
+            (player.x, player.y + player.height),
+            (player.x + player.width, player.y + player.height),
+            (player.x + player.width // 2, player.y + player.height // 2),
+        ]
+        start = (lightning.x, lightning.y)
+        end = (lightning.chain_end_x, lightning.chain_end_y)
+        threshold = getattr(lightning, 'segment_width', 18)
+        return any(self._point_to_segment_distance(px, py, start, end) <= threshold for px, py in points)
+
+    @staticmethod
+    def _point_to_segment_distance(px, py, start, end):
+        x1, y1 = start
+        x2, y2 = end
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return math.sqrt((px - x1) ** 2 + (py - y1) ** 2)
+        t = ((px - x1) * dx + (py - y1) * dy) / float(dx * dx + dy * dy)
+        t = max(0.0, min(1.0, t))
+        cx = x1 + t * dx
+        cy = y1 + t * dy
+        return math.sqrt((px - cx) ** 2 + (py - cy) ** 2)
 
 

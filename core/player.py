@@ -4,7 +4,7 @@ from .projectile import Projectile
 from .render_layers import RenderLayer
 from config.constants import (
     WIDTH, HEIGHT,
-    BLUE, GREEN, RED, YELLOW, WHITE, 
+    BLUE, GREEN, RED, YELLOW, WHITE, CYAN,
     PLAYER_BASE_SPEED, PLAYER_BASE_HEALTH, PLAYER_DASH_SPEED, 
     PLAYER_DASH_DURATION, PLAYER_DASH_COOLDOWN, PLAYER_SHOOT_COOLDOWN,
     PLAYER_PROJECTILE_DAMAGE, PLAYER_PROJECTILE_SPEED, DAMAGE_INVINCIBILITY_FRAMES,
@@ -14,10 +14,26 @@ from config.constants import (
 class Player(Entity):
     def __init__(self, x, y):
         super().__init__(x, y, 30, 30)
+        self.color = BLUE
+        self.gravity_reversed = False
+        self.time_stopped = False
+        self.render_layer = RenderLayer.ENTITIES
+        self.glow = True
+        self.last_move_dir = (0, -1)
+        self.dash_dir = (0, -1)
+        self.username = ""
+        self.hat_style = "None"
+        # Status effect system
+        self.speed_modifiers = []  # List of (multiplier, duration) tuples
+        self.speed_override = None  # Direct speed override with duration
+        self.speed_override_duration = 0
+        self.reset_to_run_base_stats()
+
+    def reset_to_run_base_stats(self):
         self.speed = PLAYER_BASE_SPEED
+        self.base_speed = PLAYER_BASE_SPEED
         self.health = PLAYER_BASE_HEALTH
         self.max_health = PLAYER_BASE_HEALTH
-        self.color = BLUE
         self.projectiles = []
         self.shoot_cooldown = 0
         self.shoot_cooldown_frames = PLAYER_SHOOT_COOLDOWN
@@ -29,20 +45,73 @@ class Player(Entity):
         self.dash_duration = 0
         self.invincible_time = 0
         self.hit_flash = 0
-        self.gravity_reversed = False
-        self.time_stopped = False
-        self.render_layer = RenderLayer.ENTITIES
-        self.glow = True
-        self.last_move_dir = (0, -1)
-        self.dash_dir = (0, -1)
-        self.username = ""
-        self.hat_style = "None"
-        
-        # Status effect system
-        self.base_speed = PLAYER_BASE_SPEED
-        self.speed_modifiers = []  # List of (multiplier, duration) tuples
-        self.speed_override = None  # Direct speed override with duration
+        self.spread_shot_level = 0
+        self.spread_shot_damage_multiplier = 0.67
+        self.reflect_shield = False
+        self.reflect_charges = 0
+        self.reflect_cooldown = 0
+        self.regen_level = 0
+        self.regen_timer = 0
+        self.piercing_shots = False
+        self.damage_taken_multiplier = 1.0
+        self.shield_max = 0
+        self.shield_health = 0
+        self.shield_regen_delay_frames = 0
+        self.shield_regen_rate = 0
+        self.shield_regen_cooldown = 0
+        self.speed_modifiers.clear()
+        self.speed_override = None
         self.speed_override_duration = 0
+
+    def apply_meta_modifier_bundle(self, modifiers):
+        self.base_speed = max(1.5, self.base_speed + float(modifiers.get("base_speed_flat", 0.0)))
+        self.max_health = max(20, int(round(self.max_health + modifiers.get("max_health_flat", 0))))
+        self.health = self.max_health
+        self.dash_speed = max(4.0, self.dash_speed * float(modifiers.get("dash_speed_mult", 1.0)))
+        self.dash_cooldown_frames = max(
+            20,
+            int(round(self.dash_cooldown_frames * float(modifiers.get("dash_cooldown_mult", 1.0)))),
+        )
+        self.shoot_cooldown_frames = max(
+            3,
+            int(round(self.shoot_cooldown_frames * float(modifiers.get("shoot_cooldown_mult", 1.0)))),
+        )
+        self.projectile_damage = max(
+            1, int(round(self.projectile_damage + modifiers.get("projectile_damage_flat", 0)))
+        )
+        self.projectile_speed = max(
+            4.0, self.projectile_speed + float(modifiers.get("projectile_speed_flat", 0.0))
+        )
+        self.damage_taken_multiplier = max(
+            0.25, float(modifiers.get("damage_taken_mult", 1.0))
+        )
+        self.reflect_charges = max(
+            0, int(round(self.reflect_charges + modifiers.get("reflect_charges_flat", 0)))
+        )
+        self.reflect_shield = self.reflect_charges > 0
+        self.regen_level = max(0, int(round(self.regen_level + modifiers.get("regen_level_flat", 0))))
+        self.spread_shot_level = max(
+            0, min(2, int(round(self.spread_shot_level + modifiers.get("spread_shot_level_flat", 0))))
+        )
+        self.piercing_shots = self.piercing_shots or bool(modifiers.get("piercing_shots", False))
+        self.shield_max = max(
+            0, int(round(self.shield_max + modifiers.get("shield_max_flat", 0)))
+        )
+        self.shield_health = self.shield_max
+        self.shield_regen_delay_frames = max(
+            self.shield_regen_delay_frames,
+            int(round(modifiers.get("shield_regen_delay_frames", 0))),
+        )
+        self.shield_regen_rate = max(
+            self.shield_regen_rate,
+            int(round(modifiers.get("shield_regen_rate_flat", 0))),
+        )
+        self.shield_regen_cooldown = 0
+        self.health = min(
+            self.max_health,
+            self.health + max(0, int(round(modifiers.get("starting_heal_flat", 0)))),
+        )
+        self.calculate_speed()
         
     def _is_binding_pressed(self, keys, binding):
         if isinstance(keys, dict):
@@ -149,11 +218,30 @@ class Player(Entity):
                     dx = (vx / dist) * self.projectile_speed
                     dy = (vy / dist) * self.projectile_speed
 
-            self.projectiles.append(Projectile(
-                origin_x,
-                origin_y,
-                dx, dy, self.projectile_damage, YELLOW
-            ))
+            shot_vectors = [(dx, dy)]
+            damage_multiplier = 1.0
+            if self.spread_shot_level > 0:
+                damage_multiplier = self.spread_shot_damage_multiplier
+                base_angle = pygame.math.Vector2(dx, dy).as_polar()[1] if (dx != 0 or dy != 0) else -90
+                spread_pattern = {
+                    1: (-12, 12),
+                    2: (-18, -6, 6, 18),
+                }.get(self.spread_shot_level, (-22, -10, 10, 22))
+                for offset in spread_pattern:
+                    vector = pygame.math.Vector2()
+                    vector.from_polar((self.projectile_speed, base_angle + offset))
+                    shot_vectors.append((vector.x, vector.y))
+
+            for shot_dx, shot_dy in shot_vectors:
+                shot_damage = max(1, int(round(self.projectile_damage * damage_multiplier)))
+                projectile = Projectile(
+                    origin_x,
+                    origin_y,
+                    shot_dx, shot_dy, shot_damage, YELLOW
+                )
+                if self.piercing_shots:
+                    projectile.set_piercing(2)
+                self.projectiles.append(projectile)
             self.shoot_cooldown = self.shoot_cooldown_frames
             
     def add_speed_modifier(self, multiplier, duration):
@@ -216,6 +304,23 @@ class Player(Entity):
             self.invincible_time -= 1
         if self.hit_flash > 0:
             self.hit_flash -= 1
+        if self.reflect_cooldown > 0:
+            self.reflect_cooldown -= 1
+        if self.shield_max > 0:
+            if self.shield_regen_cooldown > 0:
+                self.shield_regen_cooldown -= 1
+            elif self.shield_health < self.shield_max and self.shield_regen_rate > 0:
+                self.shield_health = min(
+                    self.shield_max, self.shield_health + self.shield_regen_rate
+                )
+        if self.regen_level > 0 and self.health > 0 and self.health < self.max_health:
+            self.regen_timer += 1
+            regen_interval = max(45, 160 - self.regen_level * 35)
+            if self.regen_timer >= regen_interval:
+                self.health = min(self.max_health, self.health + self.regen_level)
+                self.regen_timer = 0
+        elif self.regen_level <= 0 or self.health >= self.max_health:
+            self.regen_timer = 0
             
         # Update projectiles
         active_projectiles = []
@@ -227,7 +332,14 @@ class Player(Entity):
                 
     def take_damage(self, damage):
         if self.invincible_time <= 0:
-            self.health -= damage
+            scaled_damage = max(1, int(round(damage * self.damage_taken_multiplier)))
+            if self.shield_health > 0:
+                absorbed = min(self.shield_health, scaled_damage)
+                self.shield_health -= absorbed
+                scaled_damage -= absorbed
+                self.shield_regen_cooldown = self.shield_regen_delay_frames
+            if scaled_damage > 0:
+                self.health -= scaled_damage
             self.invincible_time = DAMAGE_INVINCIBILITY_FRAMES
             self.hit_flash = HIT_FLASH_DURATION
             return True
@@ -266,6 +378,17 @@ class Player(Entity):
         health_percentage = max(0, self.health / self.max_health)
         pygame.draw.rect(screen, RED, (self.x, self.y - 10, health_bar_width, health_bar_height))
         pygame.draw.rect(screen, GREEN, (self.x, self.y - 10, health_bar_width * health_percentage, health_bar_height))
+        if self.shield_max > 0:
+            shield_percentage = max(0, self.shield_health / self.shield_max)
+            pygame.draw.rect(screen, (28, 44, 90), (self.x, self.y - 16, health_bar_width, health_bar_height))
+            pygame.draw.rect(screen, CYAN, (self.x, self.y - 16, health_bar_width * shield_percentage, health_bar_height))
+
+        if self.reflect_shield:
+            shield_color = CYAN if self.reflect_cooldown <= 0 else (120, 180, 220)
+            pygame.draw.circle(screen, shield_color, (int(self.x + self.width // 2), int(self.y + self.height // 2)), 24, 2)
+        if self.shield_max > 0:
+            shield_ring_color = (120, 220, 255) if self.shield_regen_cooldown <= 0 else (90, 120, 170)
+            pygame.draw.circle(screen, shield_ring_color, (int(self.x + self.width // 2), int(self.y + self.height // 2)), 18, 2)
 
     def _draw_username(self, screen):
         username = (self.username or "").strip()
