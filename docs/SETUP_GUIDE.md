@@ -26,7 +26,7 @@ The Windows launcher calls `launch_windows.ps1`, which:
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd windsurf-project-3
+cd BossFight
 ```
 
 2. Install dependencies:
@@ -56,7 +56,7 @@ pip install -r requirements.txt
 ## Project Structure
 
 ```text
-windsurf-project-3/
+BossFight/
 |-- main.py
 |-- requirements.txt
 |-- README.md

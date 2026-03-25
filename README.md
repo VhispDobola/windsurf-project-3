@@ -7,7 +7,7 @@ Boss Rush is a local co-op bullet-hell boss game built with Python and Pygame. T
 1. Download this repo as a ZIP from GitHub, or clone it:
    ```powershell
    git clone <repo-url>
-   cd windsurf-project-3
+   cd BossFight
    ```
 2. Double-click `RUN_GAME.bat`.
 3. In the main menu:
